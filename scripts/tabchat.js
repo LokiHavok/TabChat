@@ -30,15 +30,15 @@ class TabbedChatManager {
     TabbedChatManager._initialized = true;
     console.log(`${MODULE_ID} | Ready`);
 
-    // Delay rendering to ensure UI is fully loaded
+    // Delay as a fallback (will be overridden by createChatMessage)
     setTimeout(() => {
       const $html = $(ui.chat.element);
       const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
       for (const message of messages) {
-        console.log(`${MODULE_ID}: Rendering message`, { id: message.id, data: message.data });
+        console.log(`${MODULE_ID}: Rendering existing message (fallback)`, { id: message.id, data: message.data });
         TabbedChatManager.renderMessage(message, $html);
       }
-    }, 3000); // Increased to 3-second delay
+    }, 5000); // Increased to 5-second delay
   }
 
   static async injectTabs(app, html, data) {
@@ -146,7 +146,7 @@ class TabbedChatManager {
           speaker: message.speaker,
           whisper: message.whisper,
           isRoll: message.isRoll,
-          data: message.data // Log full data for debugging
+          data: message.data || 'Data unavailable' // Ensure data is logged
         }
       });
       return;
@@ -257,8 +257,7 @@ Hooks.on('renderChatLog', async (app, html, data) => {
 });
 
 // Handle new messages
-Hooks.on('renderChatMessageHTML', async (message, html, data) => {
-  html.remove();
+Hooks.on('createChatMessage', async (message, html, data) => {
   await TabbedChatManager.renderMessage(message, $(ui.chat.element));
 });
 
