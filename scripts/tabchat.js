@@ -56,6 +56,7 @@ class TabbedChatManager {
         if (!ui.chat._tabchat_originalPostOne) ui.chat._tabchat_originalPostOne = ui.chat._postOne;
         ui.chat._postOne = async function (...args) {
           try {
+            // Ensure this.element is valid before proceeding
             const $el = this?.element ? $(this.element) : null;
             if ($el && $el.find && $el.find('.tabchat-container').length) {
               console.log(`${MODULE_ID}: Suppressing ui.chat._postOne because tabchat is present`);
