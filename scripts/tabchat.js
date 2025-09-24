@@ -98,37 +98,46 @@ class TabbedChatManager {
       await TabbedChatManager.injectTabs(app, html, data);
     });
     
-    // Register /b as a custom chat command to prevent Foundry errors
-    Hooks.once('ready', () => {
-      if (game.chatCommands) {
-        game.chatCommands.register({
-          name: '/b',
-          description: 'Send OOC message even when controlling a token',
-          callback: (chatlog, messageText, chatdata) => {
-            // Let our normal message processing handle it
-            const content = '[OOC] ' + messageText;
+    // Simple approach: intercept chat commands before Foundry processes them
+    Hooks.on('chatCommandsReady', () => {
+      try {
+        // Override the chat processor to handle /b commands
+        const originalProcessMessage = ChatLog.prototype._processMessage;
+        ChatLog.prototype._processMessage = function(event) {
+          const input = event.currentTarget;
+          const message = input.value.trim();
+          
+          if (message.startsWith('/b ')) {
+            // Handle /b command directly
+            const content = '[OOC] ' + message.substring(3);
             ChatMessage.create({
               content: content,
-              type: CONST.CHAT_MESSAGE_TYPES.OOC,
+              type: CONST.CHAT_MESSAGE_TYPES.OTHER,
               user: game.user.id,
               speaker: ChatMessage.getSpeaker()
             });
-            return true; // Prevent default processing
+            input.value = '';
+            return false; // Prevent default processing
           }
-        });
-        console.log(`${MODULE_ID}: Registered /b chat command`);
+          
+          // Default processing for other messages
+          return originalProcessMessage.call(this, event);
+        };
+        console.log(`${MODULE_ID}: Overrode chat processor for /b commands`);
+      } catch (err) {
+        console.warn(`${MODULE_ID}: Could not override chat processor:`, err);
       }
     });
     
     Hooks.on('preCreateChatMessage', (doc, data, options, userId) => {
       console.log(`${MODULE_ID}: preCreateChatMessage`, { id: doc?.id, content: data?.content });
       
-      // Handle /b command if it wasn't caught by the chat command registration
+      // Handle /b command if it gets through
       if (data.content && data.content.startsWith('/b ')) {
         doc._tabchatBypass = true;
         data.content = '[OOC] ' + data.content.substring(3);
-        data.type = CONST.CHAT_MESSAGE_TYPES.OOC;
-        console.log(`${MODULE_ID}: Processed /b command in preCreate, new content:`, data.content);
+        data.type = CONST.CHAT_MESSAGE_TYPES.OTHER;
+        console.log(`${MODULE_ID}: Processed /b command in preCreate`);
       }
     });
     
@@ -137,7 +146,6 @@ class TabbedChatManager {
       try {
         const hasTabUI = ui.chat?.element && $(ui.chat.element).find('.tabchat-container').length > 0;
         if (hasTabUI) {
-          console.log(`${MODULE_ID}: Suppressing renderChatMessageHTML for tabbed UI`, { id: message.id });
           if (html) {
             if (html instanceof HTMLElement && typeof html.remove === 'function') {
               html.remove();
@@ -367,10 +375,13 @@ class TabbedChatManager {
       msgHtml.addClass('tabbed-whispers-highlight');
       setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
       
-      // Always scroll to bottom for new messages
-      setTimeout(() => {
-        TabbedChatManager._scrollToBottom($html, tab);
-      }, 50);
+      // Only scroll if this is the active tab
+      if (TabbedChatManager._activeTab === tab) {
+        // Use longer delay to ensure DOM is fully updated
+        setTimeout(() => {
+          TabbedChatManager._forceScrollToBottom($html, tab);
+        }, 200);
+      }
     } else {
       console.warn(`${MODULE_ID}: No valid tab panel for ${tab}`);
     }
@@ -464,25 +475,39 @@ class TabbedChatManager {
     
     TabbedChatManager._activeTab = tabName;
     
-    // Always scroll to bottom when switching tabs
+    // Force scroll to bottom when switching tabs
     setTimeout(() => {
-      TabbedChatManager._scrollToBottom($html, tabName);
+      TabbedChatManager._forceScrollToBottom($html, tabName);
     }, 100);
   }
 
-  static _scrollToBottom($html, tabName = TabbedChatManager._activeTab) {
+  static _forceScrollToBottom($html, tabName = TabbedChatManager._activeTab) {
     const ol = $html.find(`.tabchat-panel[data-tab="${tabName}"] ol.chat-messages`);
     if (ol?.length) {
-      // Force scroll to bottom
       const scrollElement = ol[0];
-      scrollElement.scrollTop = scrollElement.scrollHeight;
-      console.log(`${MODULE_ID}: Scrolled ${tabName} tab to bottom (${scrollElement.scrollTop}/${scrollElement.scrollHeight})`);
+      
+      // Force multiple scroll attempts to ensure it works
+      requestAnimationFrame(() => {
+        scrollElement.scrollTop = scrollElement.scrollHeight;
+        
+        // Double-check and force again if needed
+        setTimeout(() => {
+          if (scrollElement.scrollTop < scrollElement.scrollHeight - scrollElement.clientHeight - 10) {
+            scrollElement.scrollTop = scrollElement.scrollHeight;
+            console.log(`${MODULE_ID}: Force-scrolled ${tabName} to bottom (${scrollElement.scrollTop}/${scrollElement.scrollHeight})`);
+          }
+        }, 50);
+      });
     }
   }
 
-  // Legacy method for compatibility
+  // Legacy methods for compatibility
+  static _scrollToBottom($html, tabName = TabbedChatManager._activeTab) {
+    return TabbedChatManager._forceScrollToBottom($html, tabName);
+  }
+
   static _scrollBottom($html, tabName = TabbedChatManager._activeTab) {
-    return TabbedChatManager._scrollToBottom($html, tabName);
+    return TabbedChatManager._forceScrollToBottom($html, tabName);
   }
 }
 
