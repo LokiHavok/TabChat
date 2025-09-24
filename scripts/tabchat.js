@@ -72,9 +72,10 @@ Hooks.on('preCreateChatMessage', (messageData, options, userId) => {
 });
 
 // Filter messages by tab, scene, and proximity
-Hooks.on('renderChatMessage', (message, html, data) => {
+Hooks.on('renderChatMessageHTML', (message, html, data) => {
   const log = ui.chat;
-  const activeTab = log.element.find('.tab-button.active').data('tab');
+  const activeTabElement = log.element.querySelector('.tab-button.active');
+  const activeTab = activeTabElement ? activeTabElement.getAttribute('data-tab') : null;
   const currentSceneId = game.scenes.viewed?.id;
   const viewerTokens = canvas.tokens?.controlled || [];
   const isPhone = message.getFlag('world', 'isPhone');
@@ -124,7 +125,7 @@ Hooks.on('renderChatMessage', (message, html, data) => {
         }
       }
       if (shouldShow && !phoneRecipients.includes(game.user.id)) {
-        html.addClass('phone-eavesdrop'); // Style eavesdropped messages
+        html.classList.add('phone-eavesdrop'); // Style eavesdropped messages
       }
     } else if (message.speaker?.token && viewerTokens.length > 0) {
       // Normal IC, /shout, /low: Scene and proximity check
@@ -150,14 +151,15 @@ Hooks.on('renderChatMessage', (message, html, data) => {
 
   // Append or hide
   if (shouldShow) {
-    log.element.find(targetPanel).append(html);
+    const panel = log.element.querySelector(targetPanel);
+    if (panel) panel.appendChild(html);
     if (activeTab === targetPanel.slice(1)) log.scrollBottom();
     // Auto-switch to tab if new message
     if (activeTab !== targetPanel.slice(1)) {
       switchToTab(targetPanel.slice(1));
     }
   } else {
-    html.hide();
+    html.style.display = 'none';
   }
 });
 
@@ -169,16 +171,24 @@ Hooks.on('renderScene', () => {
 // Tab switching function
 function switchToTab(tabId) {
   const log = ui.chat;
-  log.element.find('.tab-button').removeClass('active');
-  log.element.find('.tab-panel').removeClass('active').hide();
-  log.element.find(`.tab-button[data-tab="${tabId}"]`).addClass('active');
-  log.element.find(`#${tabId}-panel`).addClass('active').show();
+  log.element.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+  log.element.querySelectorAll('.tab-panel').forEach(panel => {
+    panel.classList.remove('active');
+    panel.style.display = 'none';
+  });
+  const btn = log.element.querySelector(`.tab-button[data-tab="${tabId}"]`);
+  if (btn) btn.classList.add('active');
+  const panel = log.element.querySelector(`#${tabId}-panel`);
+  if (panel) {
+    panel.classList.add('active');
+    panel.style.display = 'block';
+  }
   log.scrollBottom();
 }
 
 // UI Injection
 Hooks.on('renderChatLog', (log, html) => {
-  if (html.find('.tabbed-chat-tabs').length === 0) {
+  if (html.querySelector('.tabbed-chat-tabs') === null) {
     const tabsHtml = `
       <nav class="tabbed-chat-tabs">
         <button class="tab-button active" data-tab="ic">IC</button>
@@ -191,17 +201,20 @@ Hooks.on('renderChatLog', (log, html) => {
       <div class="tab-panel" id="rolls-panel"></div>
       <div class="tab-panel" id="whispers-panel"></div>
     `;
-    html.find('.chat-messages').prepend(tabsHtml);
+    const chatMessages = html.querySelector('.chat-messages');
+    if (chatMessages) chatMessages.insertAdjacentHTML('afterbegin', tabsHtml);
     // Move existing messages
-    html.find('.message').each((i, el) => {
-      const messageId = $(el).data('message-id');
+    html.querySelectorAll('.message').forEach(el => {
+      const messageId = el.getAttribute('data-message-id');
       const message = game.messages.get(messageId);
-      Hooks.call('renderChatMessage', message, $(el));
+      Hooks.call('renderChatMessageHTML', message, el);
     });
   }
   // Attach tab click handlers
-  html.find('.tab-button').click((ev) => {
-    const tabId = $(ev.currentTarget).data('tab');
-    switchToTab(tabId);
+  html.querySelectorAll('.tab-button').forEach(button => {
+    button.addEventListener('click', (ev) => {
+      const tabId = ev.currentTarget.getAttribute('data-tab');
+      switchToTab(tabId);
+    });
   });
 });
