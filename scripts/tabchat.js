@@ -53,22 +53,21 @@ class TabbedChatManager {
     if (!defaultOl.length) {
       console.warn(`${MODULE_ID}: No <ol> found in ChatLog DOM. Attempting MutationObserver...`);
 
-      // Use MutationObserver to wait for the message list
       const observer = new MutationObserver((mutations, obs) => {
         const ol = html.querySelector('ol.chat-messages') || html.querySelector('.chat-messages-container ol') || html.querySelector('ol');
         if (ol) {
           TabbedChatManager._replaceMessageList($(ol), $html);
           obs.disconnect();
-          TabbedChatManager._initialized = true; // Mark as initialized after successful injection
+          TabbedChatManager._initialized = true;
         }
       });
       observer.observe(html, { childList: true, subtree: true });
-      setTimeout(() => observer.disconnect(), 1000); // Stop after 1s if no match
+      setTimeout(() => observer.disconnect(), 1000);
       return;
     }
 
     TabbedChatManager._replaceMessageList(defaultOl, $html);
-    TabbedChatManager._initialized = true; // Mark as initialized after successful injection
+    TabbedChatManager._initialized = true;
   }
 
   static _replaceMessageList(defaultOl, $html) {
@@ -90,11 +89,14 @@ class TabbedChatManager {
     `;
     defaultOl.replaceWith(tabHtml);
 
-    // Cache tab OL elements
+    // Cache tab OL elements with validation
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
-      TabbedChatManager.tabPanels[tab] = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
-      if (!TabbedChatManager.tabPanels[tab].length) {
-        console.warn(`${MODULE_ID}: Failed to cache panel for tab ${tab}`);
+      const panel = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
+      TabbedChatManager.tabPanels[tab] = panel;
+      if (!panel.length) {
+        console.error(`${MODULE_ID}: Failed to cache panel for tab ${tab}. DOM:`, $html.find(`.tabchat-panel[data-tab="${tab}"]`).length ? 'Panel exists, no OL' : 'Panel missing');
+      } else {
+        console.log(`${MODULE_ID}: Successfully cached panel for ${tab}`);
       }
     });
 
@@ -116,6 +118,11 @@ class TabbedChatManager {
 
   static async renderMessage(message, $html) {
     const msgHtml = await message.render();
+    if (!msgHtml || typeof msgHtml !== 'object' || !('addClass' in msgHtml)) {
+      console.error(`${MODULE_ID}: Invalid msgHtml from render()`, { msgHtml, message });
+      return;
+    }
+
     const tab = TabbedChatManager._getMessageTab(message);
     if (tab && TabbedChatManager.tabPanels[tab]?.length) {
       TabbedChatManager.tabPanels[tab].append(msgHtml);
@@ -126,7 +133,7 @@ class TabbedChatManager {
       msgHtml.addClass('tabbed-whispers-highlight');
       setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
     } else {
-      console.warn(`${MODULE_ID}: No valid tab panel for message`, { tab, message });
+      console.warn(`${MODULE_ID}: No valid tab panel for message`, { tab, message, panels: TabbedChatManager.tabPanels });
     }
   }
 
@@ -156,6 +163,11 @@ class TabbedChatManager {
   }
 
   static async updateMessage(message, msgHtml, $html) {
+    if (!msgHtml || typeof msgHtml !== 'object' || !('addClass' in msgHtml)) {
+      console.error(`${MODULE_ID}: Invalid msgHtml in updateMessage()`, { msgHtml, message });
+      return;
+    }
+
     const tab = TabbedChatManager._getMessageTab(message);
     if (tab && TabbedChatManager.tabPanels[tab]?.length) {
       const existing = TabbedChatManager.tabPanels[tab].find(`[data-message-id="${message.id}"]`);
