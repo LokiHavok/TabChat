@@ -236,6 +236,15 @@ class TabbedChatManager {
   }
 
   static _replaceMessageList(defaultOl, $html) {
+    // Keep the original ol.chat-messages but hide it completely
+    defaultOl.css({
+      'display': 'none !important',
+      'height': '0 !important', 
+      'overflow': 'hidden !important',
+      'position': 'absolute',
+      'visibility': 'hidden'
+    });
+    
     const tabHtml = `
       <div class="tabchat-container">
         <nav class="tabchat-nav">
@@ -250,12 +259,12 @@ class TabbedChatManager {
             <ol class="chat-messages"></ol>
           </section>
         `).join('')}
-        <ol class="chat-messages" style="display: none !important; height: 0 !important; overflow: hidden !important;"></ol>
       </div>
     `;
     
-    defaultOl.replaceWith(tabHtml);
-    console.log(`${MODULE_ID}: FIXED - Replaced message list with tabbed interface`);
+    // Insert tabbed interface AFTER the original ol instead of replacing it
+    defaultOl.after(tabHtml);
+    console.log(`${MODULE_ID}: FIXED - Added tabbed interface, kept original ol hidden`);
 
     // Cache tab panels
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
