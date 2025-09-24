@@ -201,37 +201,48 @@ function switchToTab(tabId) {
   log.scrollBottom();
 }
 
-// UI Injection
+// UI Injection with higher priority
 Hooks.on('renderChatLog', async (log, html) => {
   if (!ui.chat?.element || !html) {
     console.warn("TabChat: ui.chat.element or html not ready in renderChatLog");
     return;
   }
+  // Wait for UI to stabilize
+  await new Promise(resolve => setTimeout(resolve, 200));
   console.log("TabChat: renderChatLog fired");
+  // Log chat log structure for debugging
+  console.log("TabChat: Chat log HTML structure", html.outerHTML);
   if (html.querySelector('.tabbed-chat-tabs') === null) {
-    const tabsHtml = `
+    const navHtml = `
       <nav class="tabbed-chat-tabs">
         <button class="tab-button active" data-tab="ic">IC</button>
         <button class="tab-button" data-tab="ooc">OOC</button>
         <button class="tab-button" data-tab="rolls">Rolls</button>
         <button class="tab-button" data-tab="whispers">Whispers</button>
       </nav>
-      <div class="tab-panel active" id="ic-panel"></div>
-      <div class="tab-panel" id="ooc-panel"></div>
-      <div class="tab-panel" id="rolls-panel"></div>
-      <div class="tab-panel" id="whispers-panel"></div>
     `;
-    const chatMessages = html.querySelector('.chat-messages');
+    const panelsHtml = `
+      <div class="tab-panel active message-list" id="ic-panel"></div>
+      <div class="tab-panel message-list" id="ooc-panel"></div>
+      <div class="tab-panel message-list" id="rolls-panel"></div>
+      <div class="tab-panel message-list" id="whispers-panel"></div>
+    `;
+    // Find the original message list
+    let chatMessages = html.querySelector('ol#chat-log');
     if (chatMessages) {
-      chatMessages.insertAdjacentHTML('afterbegin', tabsHtml);
-      // Move existing messages
+      console.log("TabChat: Found chat message container", chatMessages.tagName + '#' + chatMessages.id);
+      // Insert nav before the ol
+      chatMessages.insertAdjacentHTML('beforebegin', navHtml);
+      // Move existing messages to panels
       html.querySelectorAll('.message').forEach(el => {
         const messageId = el.getAttribute('data-message-id');
         const message = game.messages.get(messageId);
         if (message) Hooks.call('renderChatMessageHTML', message, el);
       });
+      // Replace the ol with the panels
+      chatMessages.outerHTML = panelsHtml;
     } else {
-      console.warn("TabChat: .chat-messages not found");
+      console.warn("TabChat: No valid chat message container found (ol#chat-log)");
     }
   }
   // Attach tab click handlers
@@ -241,4 +252,4 @@ Hooks.on('renderChatLog', async (log, html) => {
       switchToTab(tabId);
     });
   });
-});
+}, { priority: 100 });
