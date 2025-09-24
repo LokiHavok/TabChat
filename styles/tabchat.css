@@ -1,4 +1,5 @@
-/* Tabbed Chat Styles */
+/* Tabbed Chat Styles - Inspired by tabbed-whispers.css */
+
 .tabchat-container {
   height: 100%;
   display: flex;
@@ -6,10 +7,11 @@
 }
 
 .tabchat-nav {
+  flex: 0;
+  margin: 0 0 5px;
+  border-bottom: 1px solid #ff6400;
+  box-shadow: 0 0 10px red;
   display: flex;
-  border-bottom: 1px solid var(--color-border-primary);
-  background: var(--color-bg-primary);
-  flex-shrink: 0;
 }
 
 .tabchat-tab {
@@ -21,6 +23,8 @@
   cursor: pointer;
   font-size: var(--font-size-12);
   transition: background 0.2s;
+  flex: 1;
+  height: 18px;
 }
 
 .tabchat-tab:hover {
@@ -28,9 +32,11 @@
 }
 
 .tabchat-tab.active {
-  background: var(--color-link-hover);
   color: #fff;
-  border-bottom: 2px solid var(--color-link-default);
+  border: 1px solid red;
+  border-bottom: none;
+  box-shadow: 0 0 6px inset #ff6400;
+  border-radius: 5px 5px 0 0;
 }
 
 .tabchat-panel {
@@ -52,14 +58,24 @@
   list-style: none;
 }
 
+/* Highlight animation from tabbed-whispers */
+@keyframes chat-message-highlight {
+  from {
+    background-color: #e8e8ef;
+  }
+  to {
+    background-color: yellow;
+  }
+}
+
+.chat-message.tabbed-whispers-highlight {
+  animation-name: chat-message-highlight;
+  animation-duration: 0.3s;
+  animation-iteration-count: 8;
+  animation-direction: alternate;
+}
+
 /* Ensure chat messages fit */
 .tabchat-panel .chat-message {
   margin-bottom: 8px;
-}
-
-/* Optional: Compact mode for smaller tabs */
-@media (max-height: 600px) {
-  .tabchat-panel ol.chat-messages {
-    max-height: 300px;
-  }
 }
