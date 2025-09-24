@@ -1,5 +1,6 @@
 // Register settings on init
 Hooks.once('init', () => {
+  console.log("TabChat: init hook fired");
   game.settings.register('tabchat', 'defaultProximityRange', {
     name: 'Default IC Proximity Range (ft)',
     hint: 'Distance for normal IC chat in grid units (feet).',
@@ -21,13 +22,13 @@ Hooks.once('init', () => {
 // Parse IC commands and tag messages
 Hooks.on('preCreateChatMessage', (messageData, options, userId) => {
   console.log("TabChat: preCreateChatMessage fired", messageData.content);
-  const isIC = messageData.type === CONST.CHAT_MESSAGE_TYPES.IC;
-  const isOOC = messageData.type === CONST.CHAT_MESSAGE_TYPES.OOC;
+  const isIC = messageData.style === CONST.CHAT_MESSAGE_STYLES.IC;
+  const isOOC = messageData.style === CONST.CHAT_MESSAGE_STYLES.OOC;
   messageData.flags = messageData.flags || {};
   messageData.flags.world = messageData.flags.world || {};
 
-  // Scene tagging for IC and Rolls
-  if ([CONST.CHAT_MESSAGE_TYPES.IC, CONST.CHAT_MESSAGE_TYPES.ROLL].includes(messageData.type)) {
+  // Scene tagging for IC and messages with rolls
+  if ([CONST.CHAT_MESSAGE_STYLES.IC].includes(messageData.style) || messageData.rolls?.length > 0) {
     if (messageData.speaker?.token) {
       const token = canvas.tokens?.get(messageData.speaker.token);
       if (token) messageData.speaker.scene = token.scene?.id;
@@ -74,7 +75,10 @@ Hooks.on('preCreateChatMessage', (messageData, options, userId) => {
 
 // Filter messages by tab, scene, and proximity
 Hooks.on('renderChatMessageHTML', (message, html, data) => {
-  if (!ui.chat?.element) return; // Ensure chat UI is loaded
+  if (!ui.chat?.element) {
+    console.warn("TabChat: ui.chat.element not ready");
+    return;
+  }
   console.log("TabChat: renderChatMessageHTML fired", message.content);
   const log = ui.chat;
   const activeTabElement = log.element.querySelector('.tab-button.active');
@@ -86,24 +90,28 @@ Hooks.on('renderChatMessageHTML', (message, html, data) => {
 
   // Determine target panel
   let targetPanel;
-  switch (message.type) {
-    case CONST.CHAT_MESSAGE_TYPES.IC: targetPanel = '#ic-panel'; break;
-    case CONST.CHAT_MESSAGE_TYPES.OOC: targetPanel = '#ooc-panel'; break;
-    case CONST.CHAT_MESSAGE_TYPES.ROLL: targetPanel = '#rolls-panel'; break;
-    case CONST.CHAT_MESSAGE_TYPES.WHISPER: targetPanel = '#whispers-panel'; break;
-    default: targetPanel = '#ic-panel';
+  if (message.style === CONST.CHAT_MESSAGE_STYLES.IC) {
+    targetPanel = '#ic-panel';
+  } else if (message.style === CONST.CHAT_MESSAGE_STYLES.OOC) {
+    targetPanel = '#ooc-panel';
+  } else if (message.rolls?.length > 0) {
+    targetPanel = '#rolls-panel';
+  } else if (message.whisper?.length > 0) {
+    targetPanel = '#whispers-panel';
+  } else {
+    targetPanel = '#ic-panel';
   }
 
   // Scene and visibility filter
   let shouldShow = true;
   const speakerScene = message.speaker?.scene;
   const isGlobalOOC = message.getFlag('world', 'globalOOC');
-  if (['#rolls-panel'].includes(targetPanel)) {
+  if (targetPanel === '#rolls-panel') {
     shouldShow = speakerScene === currentSceneId;
   } else if (targetPanel === '#ooc-panel') {
     shouldShow = isGlobalOOC || speakerScene === currentSceneId;
   } else if (targetPanel === '#whispers-panel') {
-    shouldShow = message.visible;
+    shouldShow = message.whisper.includes(game.user.id) || game.user.isGM;
   }
 
   // IC Proximity filter (including /phone)
@@ -173,7 +181,10 @@ Hooks.on('renderScene', () => {
 
 // Tab switching function
 function switchToTab(tabId) {
-  if (!ui.chat?.element) return;
+  if (!ui.chat?.element) {
+    console.warn("TabChat: ui.chat.element not ready in switchToTab");
+    return;
+  }
   const log = ui.chat;
   log.element.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
   log.element.querySelectorAll('.tab-panel').forEach(panel => {
@@ -192,7 +203,10 @@ function switchToTab(tabId) {
 
 // UI Injection
 Hooks.on('renderChatLog', async (log, html) => {
-  if (!ui.chat?.element || !html) return; // Ensure chat UI is loaded
+  if (!ui.chat?.element || !html) {
+    console.warn("TabChat: ui.chat.element or html not ready in renderChatLog");
+    return;
+  }
   console.log("TabChat: renderChatLog fired");
   if (html.querySelector('.tabbed-chat-tabs') === null) {
     const tabsHtml = `
@@ -216,6 +230,8 @@ Hooks.on('renderChatLog', async (log, html) => {
         const message = game.messages.get(messageId);
         if (message) Hooks.call('renderChatMessageHTML', message, el);
       });
+    } else {
+      console.warn("TabChat: .chat-messages not found");
     }
   }
   // Attach tab click handlers
