@@ -133,10 +133,11 @@ class TabbedChatManager {
       return;
     }
 
-    let msgHtml;
+    let rendered;
     try {
-      msgHtml = await message.render();
-      if (!msgHtml) {
+      rendered = await message.render();
+      console.log(`${MODULE_ID}: Rendered type`, { type: typeof rendered, value: rendered });
+      if (!rendered) {
         throw new Error('Render returned undefined');
       }
     } catch (e) {
@@ -156,11 +157,12 @@ class TabbedChatManager {
       // Delayed retry
       await new Promise(resolve => setTimeout(resolve, 1000));
       try {
-        msgHtml = await message.render();
-        if (!msgHtml) {
+        rendered = await message.render();
+        console.log(`${MODULE_ID}: Second render type`, { type: typeof rendered, value: rendered });
+        if (!rendered) {
           console.warn(`${MODULE_ID}: Second render attempt failed for message`, { id: message.id });
           // Force fallback HTML
-          msgHtml = $(`<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`);
+          rendered = `<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`;
         }
       } catch (e2) {
         console.error(`${MODULE_ID}: Second render attempt failed`, {
@@ -169,13 +171,16 @@ class TabbedChatManager {
           message: { id: message.id }
         });
         // Force fallback HTML
-        msgHtml = $(`<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`);
+        rendered = `<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`;
       }
     }
 
+    // Wrap rendered output in jQuery
+    let msgHtml = $(rendered);
     if (!msgHtml || typeof msgHtml !== 'object' || !('addClass' in msgHtml)) {
-      console.error(`${MODULE_ID}: Invalid msgHtml from render()`, {
+      console.error(`${MODULE_ID}: Invalid msgHtml after wrapping`, {
         msgHtml,
+        renderedType: typeof rendered,
         message: {
           id: message.id,
           content: message.content,
@@ -307,7 +312,7 @@ Hooks.on('createChatMessage', async (message, html, data) => {
 
 // Handle updates
 Hooks.on('updateChatMessage', async (message, update, options, userId) => {
-  const msgHtml = await message.render();
+  const msgHtml = $(await message.render()); // Wrap render output
   await TabbedChatManager.updateMessage(message, msgHtml, $(ui.chat.element));
 });
 
