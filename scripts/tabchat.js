@@ -41,16 +41,19 @@ class TabbedChatManager {
       }
     }, 5000); // 5-second delay
 
-    // Override _postOne to suppress default append
-    if (!ChatLog.prototype._originalPostOne) {
-      ChatLog.prototype._originalPostOne = ChatLog.prototype._postOne;
-      ChatLog.prototype._postOne = async function (...args) {
-        console.log(`${MODULE_ID}: Overriding _postOne, suppressing default append`, { args });
+    // Patch the active chat log instance
+    if (ui.chat && typeof ui.chat._postOne === 'function') {
+      ui.chat._originalPostOne = ui.chat._postOne;
+      ui.chat._postOne = async function (...args) {
+        console.log(`${MODULE_ID}: Suppressed default _postOne on ui.chat instance`, { args });
         if (TabbedChatManager._initialized) {
           return; // Suppress append if module is handling messages
         }
-        return this._originalPostOne.call(this, ...args); // Fallback to original if not initialized
+        return ui.chat._originalPostOne.call(this, ...args); // Fallback to original if not initialized
       };
+      console.log(`${MODULE_ID} | Suppressed default ChatLog._postOne on ui.chat instance`);
+    } else {
+      console.warn(`${MODULE_ID}: Failed to patch ui.chat._postOne, method not found`);
     }
   }
 
