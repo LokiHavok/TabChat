@@ -19,6 +19,10 @@ class TabbedChatManager {
       type: Number
     });
     console.log(`${MODULE_ID} | Initialized settings`);
+    
+    // Use the proper v13 ChatLog reference
+    const ChatLog = foundry.applications.sidebar.tabs.ChatLog;
+    
     // --- Prototype patch: wrap original so behavior falls back if Tabbed UI not present ---
     if (!ChatLog.prototype._tabchat_originalPostOne) {
       ChatLog.prototype._tabchat_originalPostOne = ChatLog.prototype._postOne;
@@ -132,6 +136,7 @@ class TabbedChatManager {
           customHandledMessages.delete(message._tempId);
           customHandledMessages.add(message.id);
           message._customHandled = true;
+          console.log(`${MODULE_ID}: Marked message as custom handled`, { id: message.id });
         }
       } catch (err) {
         console.warn(`${MODULE_ID}: createChatMessage handler error`, err);
@@ -142,15 +147,10 @@ class TabbedChatManager {
     Hooks.on('renderChatMessageHTML', (message, html, data) => {
       try {
         const isCustom = customHandledMessages.has(message.id) || message._customHandled;
-        console.log(`${MODULE_ID}: Intercepting renderChatMessageHTML`, { id: message.id, htmlExists: !!html, custom: isCustom });
+        console.log(`${MODULE_ID}: Intercepting renderChatMessageHTML`, { id: message.id, custom: isCustom });
         
         if (isCustom) {
-          // html may be an HTMLElement or jQuery object
-          if (html) {
-            if (html instanceof HTMLElement && typeof html.remove === 'function') html.remove();
-            else if (html && typeof html.remove === 'function') html.remove(); // jQuery
-          }
-          // Returning false prevents Foundry's default append logic for this message's rendered HTML
+          // Prevent Foundry from appending this message to the default chat log
           return false;
         }
         return true;
@@ -169,27 +169,35 @@ class TabbedChatManager {
           customHandledMessages.delete(message._tempId);
           customHandledMessages.add(message.id);
           message._customHandled = true;
+          console.log(`${MODULE_ID}: Marked message as custom handled in create hook`, { id: message.id });
         }
       } catch (err) {
         console.warn(`${MODULE_ID}: createChatMessage handler error`, err);
       }
       
-      // Then render the message
-      await TabbedChatManager.renderMessage(message, $(ui.chat.element));
+      // Then render the message to our tabbed interface
+      if (ui.chat?.element) {
+        await TabbedChatManager.renderMessage(message, $(ui.chat.element));
+      }
     });
     
     Hooks.on('updateChatMessage', async (message, update, options, userId) => {
-      const msgHtml = $(await message.renderHTML());
-      await TabbedChatManager.updateMessage(message, msgHtml, $(ui.chat.element));
+      if (ui.chat?.element) {
+        const msgHtml = $(await message.renderHTML());
+        await TabbedChatManager.updateMessage(message, msgHtml, $(ui.chat.element));
+      }
     });
     
     Hooks.on('deleteChatMessage', (message, options, userId) => {
-      TabbedChatManager.deleteMessage(message.id, $(ui.chat.element));
+      if (ui.chat?.element) {
+        TabbedChatManager.deleteMessage(message.id, $(ui.chat.element));
+      }
     });
     
     // Optional: restore originals on unload/hot-reload
     Hooks.on('unload', () => {
       try {
+        const ChatLog = foundry.applications.sidebar.tabs.ChatLog;
         if (ChatLog.prototype._tabchat_originalPostOne) {
           ChatLog.prototype._postOne = ChatLog.prototype._tabchat_originalPostOne;
           delete ChatLog.prototype._tabchat_originalPostOne;
