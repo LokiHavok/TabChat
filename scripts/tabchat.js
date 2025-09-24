@@ -18,6 +18,15 @@ class TabbedChatManager {
       type: Number
     });
     console.log(`${MODULE_ID} | Initialized settings`);
+
+    // Patch the prototype to cover all future instances
+    if (!ChatLog.prototype._originalPostOne) {
+      ChatLog.prototype._originalPostOne = ChatLog.prototype._postOne;
+      ChatLog.prototype._postOne = async function (...args) {
+        console.log(`${MODULE_ID}: Suppressed default _postOne on prototype`, { args });
+        return; // Do nothing; TabbedChatManager handles messages
+      };
+    }
   }
 
   static ready() {
@@ -41,19 +50,22 @@ class TabbedChatManager {
       }
     }, 5000); // 5-second delay
 
-    // Patch the active chat log instance
+    // Patch the current ui.chat instance
     if (ui.chat && typeof ui.chat._postOne === 'function') {
       ui.chat._originalPostOne = ui.chat._postOne;
       ui.chat._postOne = async function (...args) {
         console.log(`${MODULE_ID}: Suppressed default _postOne on ui.chat instance`, { args });
-        if (TabbedChatManager._initialized) {
-          return; // Suppress append if module is handling messages
-        }
-        return ui.chat._originalPostOne.call(this, ...args); // Fallback to original if not initialized
+        return; // Do nothing; TabbedChatManager handles messages
       };
-      console.log(`${MODULE_ID} | Suppressed default ChatLog._postOne on ui.chat instance`);
+      console.log(`${MODULE_ID} | Disabled ui.chat._postOne`);
     } else {
       console.warn(`${MODULE_ID}: Failed to patch ui.chat._postOne, method not found`);
+    }
+
+    // Failsafe: Add a hidden <ol> if none exists
+    if (!ui.chat?.element.find('ol.chat-messages').length) {
+      ui.chat.element.append('<ol class="chat-messages" style="display:none"></ol>');
+      console.log(`${MODULE_ID} | Inserted dummy chat-messages <ol>`);
     }
   }
 
