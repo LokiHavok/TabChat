@@ -159,8 +159,8 @@ class TabbedChatManager {
         msgHtml = await message.render();
         if (!msgHtml) {
           console.warn(`${MODULE_ID}: Second render attempt failed for message`, { id: message.id });
-          // Fallback HTML if render fails
-          msgHtml = $(`<li class="chat-message" data-message-id="${message.id}"><div class="message-content">${message.content || 'Failed to render'}</div></li>`);
+          // Enhanced fallback HTML
+          msgHtml = $(`<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`);
         }
       } catch (e2) {
         console.error(`${MODULE_ID}: Second render attempt failed`, {
@@ -168,8 +168,8 @@ class TabbedChatManager {
           stack: e2.stack,
           message: { id: message.id }
         });
-        // Fallback HTML
-        msgHtml = $(`<li class="chat-message" data-message-id="${message.id}"><div class="message-content">${message.content || 'Failed to render'}</div></li>`);
+        // Enhanced fallback HTML
+        msgHtml = $(`<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`);
       }
     }
 
@@ -189,7 +189,7 @@ class TabbedChatManager {
 
     const tab = TabbedChatManager._getMessageTab(message);
     if (tab) {
-      // Ensure panel exists, reinitialize if necessary
+      // Ensure panel exists, reinitialize if necessary with a limit
       if (!TabbedChatManager.tabPanels[tab]?.length) {
         console.warn(`${MODULE_ID}: Tab panel for ${tab} not found, reinitializing`);
         TabbedChatManager._replaceMessageList($html.find('ol.chat-messages'), $html);
@@ -211,6 +211,9 @@ class TabbedChatManager {
             panel: TabbedChatManager.tabPanels[tab],
             message: { id: message.id, content: message.content }
           });
+          // Force reinitialization on append failure
+          TabbedChatManager._replaceMessageList($html.find('ol.chat-messages'), $html);
+          TabbedChatManager.tabPanels[tab].append(msgHtml); // Retry append
         }
       } else {
         console.warn(`${MODULE_ID}: No valid tab panel after reinitialization`, { tab, message: { id: message.id, content: message.content } });
