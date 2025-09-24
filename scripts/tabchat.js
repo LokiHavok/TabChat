@@ -1,24 +1,38 @@
 // Tabbed Chat Module for Foundry VTT v13
 // Inspired by fvtt-tabbed-whispers and proximity-text-chat
 
-class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
-  constructor(options = {}) {
-    super(options);
-    this._activeTab = 'ic';
-    this.tabPanels = {};
+const MODULE_ID = 'tabchat';
+
+class TabbedChatManager {
+  static tabPanels = {};
+  static _activeTab = 'ic';
+
+  static init() {
+    // Register proximity setting (world scope, like in tabbed-whispers)
+    game.settings.register(MODULE_ID, 'proximityRange', {
+      name: 'IC Proximity Range',
+      hint: 'Max distance (units) for IC messages to appear (default: 30).',
+      scope: 'world',
+      config: true,
+      default: 30,
+      type: Number
+    });
+
+    // Optional: Per-user settings inspired by UserSettings class
+    // For now, keep proximity world-level; add user flags if needed later
   }
 
-  /**
-   * Override to inject tab structure after base render.
-   */
-  async _renderInner(data) {
-    const html = await super._renderInner(data);
+  static ready() {
+    // No need to replace ui.chat; hooks handle injection
+    console.log(`${MODULE_ID} | Ready`);
+  }
 
+  static injectTabs(app, html, data) {
     // Replace the default <ol class="chat-messages"> with tabbed structure
     const defaultOl = html.find('ol.chat-messages');
     if (!defaultOl.length) {
-      console.warn('TabbedChatLog: No chat-messages OL found in rendered HTML');
-      return html; // Fallback to prevent breaking
+      console.warn(`${MODULE_ID}: No chat-messages OL found`);
+      return;
     }
 
     const tabHtml = `
@@ -38,44 +52,39 @@ class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
     `;
     defaultOl.replaceWith(tabHtml);
 
-    // Cache tab OL elements after render
-    this.element = html; // Ensure this.element is set for tab binding
+    // Cache tab OL elements
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
-      this.tabPanels[tab] = html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
+      TabbedChatManager.tabPanels[tab] = html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
     });
 
     // Bind tab clicks
-    html.find('.tabchat-tab').on('click', (event) => this._activateTab(event.currentTarget.dataset.tab));
+    html.find('.tabchat-tab').on('click', (event) => TabbedChatManager._activateTab(event.currentTarget.dataset.tab, html));
 
     // Render existing messages into tabs
-    const messages = this.collection.sort((a, b) => a.id.localeCompare(b.id));
+    const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
     for (const message of messages) {
-      await this.renderMessage(message);
+      TabbedChatManager.renderMessage(message, html);
     }
 
     // Initial scroll
-    this._scrollBottom();
-    return html;
+    TabbedChatManager._scrollBottom(html);
   }
 
-  /**
-   * Render a message into the appropriate tab.
-   */
-  async renderMessage(message, options = {}) {
-    const html = await message.render();
-    const tab = this._getMessageTab(message);
-    if (tab && this.tabPanels[tab]) {
-      this.tabPanels[tab].append(html);
-      if (this._activeTab === tab) {
-        this._scrollBottom(tab);
+  static async renderMessage(message, html) {
+    const msgHtml = await message.render();
+    const tab = TabbedChatManager._getMessageTab(message);
+    if (tab && TabbedChatManager.tabPanels[tab]) {
+      TabbedChatManager.tabPanels[tab].append(msgHtml);
+      if (TabbedChatManager._activeTab === tab) {
+        TabbedChatManager._scrollBottom(html, tab);
       }
+      // Add highlight animation inspired by tabbed-whispers.css
+      msgHtml.addClass('tabbed-whispers-highlight');
+      setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500); // ~8 iterations * 0.3s
     }
   }
 
-  /**
-   * Determine which tab a message belongs to.
-   */
-  _getMessageTab(message) {
+  static _getMessageTab(message) {
     // Rolls tab
     if (message.isRoll) return 'rolls';
 
@@ -97,7 +106,7 @@ class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
       // Proximity check (using first controlled token)
       const controlled = controlledTokens[0];
       const distance = canvas.grid.measureDistance(tokenDoc.center, controlled.center);
-      const range = game.settings.get('tabchat', 'proximityRange') || 30;
+      const range = game.settings.get(MODULE_ID, 'proximityRange') || 30;
       if (distance <= range) return 'ic';
     }
 
@@ -105,100 +114,66 @@ class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
     return 'ooc';
   }
 
-  /**
-   * Override to handle updates by replacing HTML in the tab.
-   */
-  updateMessage(message, html, options = {}) {
-    const tab = this._getMessageTab(message);
-    if (tab && this.tabPanels[tab]) {
-      const existing = this.tabPanels[tab].find(`[data-message-id="${message.id}"]`);
+  static updateMessage(message, msgHtml, html) {
+    const tab = TabbedChatManager._getMessageTab(message);
+    if (tab && TabbedChatManager.tabPanels[tab]) {
+      const existing = TabbedChatManager.tabPanels[tab].find(`[data-message-id="${message.id}"]`);
       if (existing.length) {
-        existing.replaceWith(html);
-        if (this._activeTab === tab) {
-          this._scrollBottom(tab);
+        existing.replaceWith(msgHtml);
+        if (TabbedChatManager._activeTab === tab) {
+          TabbedChatManager._scrollBottom(html, tab);
         }
       }
     }
   }
 
-  /**
-   * Override to remove from the tab.
-   */
-  deleteMessage(messageId) {
+  static deleteMessage(messageId, html) {
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
-      this.tabPanels[tab]?.find(`[data-message-id="${messageId}"]`).remove();
+      TabbedChatManager.tabPanels[tab]?.find(`[data-message-id="${messageId}"]`).remove();
     });
   }
 
-  /**
-   * Switch to a tab.
-   */
-  _activateTab(tabName) {
-    this.element.find('.tabchat-tab').removeClass('active');
-    this.element.find(`[data-tab="${tabName}"]`).addClass('active');
-    this.element.find('.tabchat-panel').removeClass('active');
-    this.element.find(`.tabchat-panel[data-tab="${tabName}"]`).addClass('active');
-    this._activeTab = tabName;
-    this._scrollBottom();
+  static _activateTab(tabName, html) {
+    html.find('.tabchat-tab').removeClass('active');
+    html.find(`[data-tab="${tabName}"]`).addClass('active');
+    html.find('.tabchat-panel').removeClass('active');
+    html.find(`.tabchat-panel[data-tab="${tabName}"]`).addClass('active');
+    TabbedChatManager._activeTab = tabName;
+    TabbedChatManager._scrollBottom(html);
   }
 
-  /**
-   * Scroll the active tab (or specified) to bottom.
-   */
-  _scrollBottom(tabName = this._activeTab) {
-    const ol = this.tabPanels[tabName];
+  static _scrollBottom(html, tabName = TabbedChatManager._activeTab) {
+    const ol = html.find(`.tabchat-panel[data-tab="${tabName}"] ol.chat-messages`);
     if (ol?.length) {
       ol.prop('scrollTop', ol[0].scrollHeight);
     }
   }
-
-  /**
-   * Override collection create hook.
-   */
-  _onCreateDocument(document, collection, options, userId) {
-    super._onCreateDocument?.(document, collection, options, userId);
-    this.renderMessage(document, options);
-  }
-
-  /**
-   * Override collection update hook.
-   */
-  _onUpdateDocument(document, update, options, userId) {
-    super._onUpdateDocument?.(document, update, options, userId);
-    this.updateMessage(document, document.render(), options);
-  }
-
-  /**
-   * Override collection delete hook.
-   */
-  _onDeleteDocument(document, collection, options, userId) {
-    super._onDeleteDocument?.(document, collection, options, userId);
-    this.deleteMessage(document.id);
-  }
 }
 
 // Module Initialization
-Hooks.once('init', () => {
-  // Register proximity setting
-  game.settings.register('tabchat', 'proximityRange', {
-    name: 'IC Proximity Range',
-    hint: 'Max distance (units) for IC messages to appear (default: 30).',
-    scope: 'world',
-    config: true,
-    default: 30,
-    type: Number
-  });
+Hooks.once('init', TabbedChatManager.init);
+
+Hooks.once('ready', TabbedChatManager.ready);
+
+// Inject tabs on chat render
+Hooks.on('renderChatLog', (app, html, data) => {
+  TabbedChatManager.injectTabs(app, html, data);
 });
 
-Hooks.once('ready', () => {
-  // Replace core ChatLog with tabbed version
-  if (ui.chat instanceof TabbedChatLog) {
-    console.log('TabbedChatLog: Already initialized, skipping.');
-    return;
-  }
-  console.log('TabbedChatLog: Initializing chat replacement...');
-  const chatOptions = foundry.utils.deepClone(ui.chat?.options || {});
-  ui.chat.close({ force: true }).catch((err) => console.warn('TabbedChatLog: Error closing core chat:', err));
-  ui.chat = new TabbedChatLog(chatOptions);
-  ui.chat.render(true).catch((err) => console.error('TabbedChatLog: Error rendering:', err));
+// Handle new messages
+Hooks.on('renderChatMessage', async (message, html, data) => {
+  // Prevent default append; we handle it
+  html.remove();
+  await TabbedChatManager.renderMessage(message, ui.chat.element);
+});
+
+// Handle updates
+Hooks.on('updateChatMessage', async (message, update, options, userId) => {
+  const msgHtml = await message.render();
+  TabbedChatManager.updateMessage(message, msgHtml, ui.chat.element);
+});
+
+// Handle deletes
+Hooks.on('deleteChatMessage', (message, options, userId) => {
+  TabbedChatManager.deleteMessage(message.id, ui.chat.element);
 });
