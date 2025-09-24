@@ -8,6 +8,7 @@ class TabbedChatManager {
   static _activeTab = 'ic';
   static _initialized = false;
 
+  // ---------- Robust double-patch + hooks (replace existing init/ready/hooks block) ----------
   static init() {
     game.settings.register(MODULE_ID, 'proximityRange', {
       name: 'IC Proximity Range',
@@ -18,13 +19,27 @@ class TabbedChatManager {
       type: Number
     });
     console.log(`${MODULE_ID} | Initialized settings`);
-
-    // Patch the prototype to cover all future instances
-    if (!ChatLog.prototype._originalPostOne) {
-      ChatLog.prototype._originalPostOne = ChatLog.prototype._postOne;
+    // --- Prototype patch: wrap original so behavior falls back if Tabbed UI not present ---
+    if (!ChatLog.prototype._tabchat_originalPostOne) {
+      ChatLog.prototype._tabchat_originalPostOne = ChatLog.prototype._postOne;
       ChatLog.prototype._postOne = async function (...args) {
-        console.log(`${MODULE_ID}: Suppressed default _postOne on prototype`, { args });
-        return; // Do nothing; TabbedChatManager handles messages
+        try {
+          // If our tab UI exists in this chat element, suppress default posting.
+          // Otherwise, call original behavior so other modules / vanilla UI still work.
+          const $el = this.element;
+          if ($el && $el.find && $el.find('.tabchat-container').length) {
+            console.log(`${MODULE_ID}: Suppressing ChatLog._postOne because tabchat is present`);
+            return;
+          }
+          // No tab container found — fall back to original implementation
+          return await ChatLog.prototype._tabchat_originalPostOne.apply(this, args);
+        } catch (err) {
+          console.error(`${MODULE_ID}: Error in patched ChatLog._postOne`, err);
+          // On unexpected error, attempt original behavior
+          if (ChatLog.prototype._tabchat_originalPostOne) {
+            return await ChatLog.prototype._tabchat_originalPostOne.apply(this, args);
+          }
+        }
       };
     }
   }
@@ -36,39 +51,121 @@ class TabbedChatManager {
     }
     TabbedChatManager._initialized = true;
     console.log(`${MODULE_ID} | Ready`);
-    // Delay as a fallback to render existing messages
+    // Patch the actual ui.chat instance method too (defensive)
+    try {
+      if (ui.chat && typeof ui.chat._postOne === 'function') {
+        if (!ui.chat._tabchat_originalPostOne) ui.chat._tabchat_originalPostOne = ui.chat._postOne;
+        ui.chat._postOne = async function (...args) {
+          try {
+            const $el = this.element;
+            if ($el && $el.find && $el.find('.tabchat-container').length) {
+              console.log(`${MODULE_ID}: Suppressing ui.chat._postOne because tabchat is present`);
+              return;
+            }
+            return await ui.chat._tabchat_originalPostOne.apply(this, args);
+          } catch (err) {
+            console.error(`${MODULE_ID}: Error in patched ui.chat._postOne`, err);
+            if (ui.chat._tabchat_originalPostOne) {
+              return await ui.chat._tabchat_originalPostOne.apply(this, args);
+            }
+          }
+        };
+        console.log(`${MODULE_ID} | Patched ui.chat._postOne (instance)`);
+      }
+    } catch (err) {
+      console.warn(`${MODULE_ID} | Failed to patch ui.chat._postOne instance (continuing)`, err);
+    }
+    // Failsafe: ensure a hidden ol exists so older code that expects it won't crash
+    try {
+      if (ui.chat && ui.chat.element && !ui.chat.element.find('ol.chat-messages').length) {
+        ui.chat.element.append('<ol class="chat-messages" style="display:none"></ol>');
+        console.log(`${MODULE_ID} | Inserted dummy chat-messages <ol> (failsafe)`);
+      }
+    } catch (err) {
+      console.warn(`${MODULE_ID} | Could not add dummy ol failsafe`, err);
+    }
+    // Render existing messages (deferred as a safety)
     setTimeout(() => {
-      if (!ui.chat?.element) {
-        console.warn(`${MODULE_ID}: UI not ready, skipping existing message rendering`);
-        return;
+      try {
+        if (!ui.chat?.element) {
+          console.warn(`${MODULE_ID}: UI not ready, skipping existing message rendering`);
+          return;
+        }
+        const $html = $(ui.chat.element);
+        const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
+        for (const message of messages) {
+          TabbedChatManager.renderMessage(message, $html);
+        }
+      } catch (err) {
+        console.error(`${MODULE_ID} | Error rendering fallback messages`, err);
       }
-      const $html = $(ui.chat.element);
-      const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
-      for (const message of messages) {
-        console.log(`${MODULE_ID}: Rendering existing message (fallback)`, { id: message.id, data: message.data });
-        TabbedChatManager.renderMessage(message, $html);
-      }
-    }, 5000); // 5-second delay
-
-    // Patch the current ui.chat instance
-    if (ui.chat && typeof ui.chat._postOne === 'function') {
-      ui.chat._originalPostOne = ui.chat._postOne;
-      ui.chat._postOne = async function (...args) {
-        console.log(`${MODULE_ID}: Suppressed default _postOne on ui.chat instance`, { args });
-        return; // Do nothing; TabbedChatManager handles messages
-      };
-      console.log(`${MODULE_ID} | Disabled ui.chat._postOne`);
-    } else {
-      console.warn(`${MODULE_ID}: Failed to patch ui.chat._postOne, method not found`);
-    }
-
-    // Failsafe: Add a hidden <ol> if none exists
-    if (!ui.chat?.element.find('ol.chat-messages').length) {
-      ui.chat.element.append('<ol class="chat-messages" style="display:none"></ol>');
-      console.log(`${MODULE_ID} | Inserted dummy chat-messages <ol>`);
-    }
+    }, 1500);
   }
 
+  // ---------------- Hooks ----------------
+  // Inject tabs on chat render (renderChatLog still works; html may be HTMLElement or jQuery)
+  Hooks.on('renderChatLog', async (app, html, data) => {
+    await TabbedChatManager.injectTabs(app, html, data);
+  });
+  // Mark pre-creation so we can suppress Foundry UI append in render hook
+  Hooks.on('preCreateChatMessage', (doc, data, options, userId) => {
+    // Attach flag to the document being created; Foundry will pass that same doc to create hooks.
+    try {
+      if (doc) doc._customHandled = true;
+      console.log(`${MODULE_ID}: preCreateChatMessage flagged for custom handling`, { id: doc?.id, content: data?.content });
+    } catch (err) {
+      console.warn(`${MODULE_ID}: preCreateChatMessage handler error`, err);
+    }
+  });
+  // Intercept Foundry's render hook (v13 uses HTMLElement)
+  Hooks.on('renderChatMessageHTML', (message, html, data) => {
+    try {
+      console.log(`${MODULE_ID}: Intercepting renderChatMessageHTML`, { id: message.id, htmlExists: !!html, custom: !!message._customHandled });
+      if (message._customHandled) {
+        // html may be an HTMLElement or jQuery object
+        if (html) {
+          if (html instanceof HTMLElement && typeof html.remove === 'function') html.remove();
+          else if (html && typeof html.remove === 'function') html.remove(); // jQuery
+        }
+        // Returning false prevents Foundry's default append logic for this message's rendered HTML
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error(`${MODULE_ID}: Error in renderChatMessageHTML hook`, err);
+      // If something goes wrong, don't block Foundry
+      return true;
+    }
+  });
+  // Create/Update/Delete handlers
+  Hooks.on('createChatMessage', async (message, html, data) => {
+    await TabbedChatManager.renderMessage(message, $(ui.chat.element));
+  });
+  Hooks.on('updateChatMessage', async (message, update, options, userId) => {
+    const msgHtml = $(await message.renderHTML());
+    await TabbedChatManager.updateMessage(message, msgHtml, $(ui.chat.element));
+  });
+  Hooks.on('deleteChatMessage', (message, options, userId) => {
+    TabbedChatManager.deleteMessage(message.id, $(ui.chat.element));
+  });
+  // Optional: restore originals on unload/hot-reload
+  Hooks.on('unload', () => {
+    try {
+      if (ChatLog.prototype._tabchat_originalPostOne) {
+        ChatLog.prototype._postOne = ChatLog.prototype._tabchat_originalPostOne;
+        delete ChatLog.prototype._tabchat_originalPostOne;
+      }
+      if (ui.chat && ui.chat._tabchat_originalPostOne) {
+        ui.chat._postOne = ui.chat._tabchat_originalPostOne;
+        delete ui.chat._tabchat_originalPostOne;
+      }
+      console.log(`${MODULE_ID} | Restored original ChatLog._postOne on unload`);
+    } catch (err) {
+      console.warn(`${MODULE_ID} | Error restoring originals on unload`, err);
+    }
+  });
+
+  // ---------------- Core Methods ----------------
   static async injectTabs(app, html, data) {
     if (!(html instanceof HTMLElement) || TabbedChatManager._initialized) {
       console.log(`${MODULE_ID}: Skipping injection (already initialized or invalid HTML)`, { html });
@@ -308,39 +405,3 @@ class TabbedChatManager {
 Hooks.once('init', TabbedChatManager.init);
 
 Hooks.once('ready', TabbedChatManager.ready);
-
-// Inject tabs on chat render
-Hooks.on('renderChatLog', async (app, html, data) => {
-  await TabbedChatManager.injectTabs(app, html, data);
-});
-
-// Prevent Foundry's default appending with pre-hook
-Hooks.on('preCreateChatMessage', (message, data, options, userId) => {
-  console.log(`${MODULE_ID}: Pre-creating message, marking for custom handling`, { id: message.id, content: message.content });
-  message._customHandled = true;
-});
-
-Hooks.on('renderChatMessageHTML', (message, html, data) => {
-  console.log(`${MODULE_ID}: Intercepting renderChatMessageHTML`, { id: message.id, htmlExists: !!html });
-  if (message._customHandled) {
-    if (html) html.remove();
-    return false;
-  }
-  return true;
-});
-
-// Handle new messages
-Hooks.on('createChatMessage', async (message, html, data) => {
-  await TabbedChatManager.renderMessage(message, $(ui.chat.element));
-});
-
-// Handle updates
-Hooks.on('updateChatMessage', async (message, update, options, userId) => {
-  const msgHtml = $(await message.renderHTML());
-  await TabbedChatManager.updateMessage(message, msgHtml, $(ui.chat.element));
-});
-
-// Handle deletes
-Hooks.on('deleteChatMessage', (message, options, userId) => {
-  TabbedChatManager.deleteMessage(message.id, $(ui.chat.element));
-});
