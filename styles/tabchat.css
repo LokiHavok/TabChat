@@ -15,6 +15,7 @@
   justify-content: center; /* Center the tabs */
   flex-direction: row; /* Ensure left-to-right order */
   flex-wrap: nowrap; /* Prevent wrapping */
+  direction: ltr; /* Force left-to-right direction */
 }
 
 .tabchat-tab {
