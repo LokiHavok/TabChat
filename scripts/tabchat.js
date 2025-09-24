@@ -38,7 +38,7 @@ class TabbedChatManager {
         console.log(`${MODULE_ID}: Rendering message`, { id: message.id, data: message.data });
         TabbedChatManager.renderMessage(message, $html);
       }
-    }, 2000); // Increased to 2-second delay
+    }, 3000); // Increased to 3-second delay
   }
 
   static async injectTabs(app, html, data) {
