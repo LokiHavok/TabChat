@@ -126,7 +126,14 @@ class TabbedChatManager {
       return;
     }
 
-    const msgHtml = await message.render();
+    let msgHtml;
+    try {
+      msgHtml = await message.render();
+    } catch (e) {
+      console.error(`${MODULE_ID}: Error rendering message`, { error: e.message, message: { id: message.id, content: message.content, type: message.type, speaker: message.speaker, whisper: message.whisper } });
+      return;
+    }
+
     if (!msgHtml || typeof msgHtml !== 'object' || !('addClass' in msgHtml)) {
       console.error(`${MODULE_ID}: Invalid msgHtml from render()`, {
         msgHtml,
