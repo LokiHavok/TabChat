@@ -20,6 +20,7 @@ Hooks.once('init', () => {
 
 // Parse IC commands and tag messages
 Hooks.on('preCreateChatMessage', (messageData, options, userId) => {
+  console.log("TabChat: preCreateChatMessage fired", messageData.content);
   const isIC = messageData.type === CONST.CHAT_MESSAGE_TYPES.IC;
   const isOOC = messageData.type === CONST.CHAT_MESSAGE_TYPES.OOC;
   messageData.flags = messageData.flags || {};
@@ -73,6 +74,8 @@ Hooks.on('preCreateChatMessage', (messageData, options, userId) => {
 
 // Filter messages by tab, scene, and proximity
 Hooks.on('renderChatMessageHTML', (message, html, data) => {
+  if (!ui.chat?.element) return; // Ensure chat UI is loaded
+  console.log("TabChat: renderChatMessageHTML fired", message.content);
   const log = ui.chat;
   const activeTabElement = log.element.querySelector('.tab-button.active');
   const activeTab = activeTabElement ? activeTabElement.getAttribute('data-tab') : null;
@@ -165,11 +168,12 @@ Hooks.on('renderChatMessageHTML', (message, html, data) => {
 
 // Re-render on scene change
 Hooks.on('renderScene', () => {
-  ui.chat.render();
+  if (ui.chat) ui.chat.render();
 });
 
 // Tab switching function
 function switchToTab(tabId) {
+  if (!ui.chat?.element) return;
   const log = ui.chat;
   log.element.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
   log.element.querySelectorAll('.tab-panel').forEach(panel => {
@@ -187,7 +191,9 @@ function switchToTab(tabId) {
 }
 
 // UI Injection
-Hooks.on('renderChatLog', (log, html) => {
+Hooks.on('renderChatLog', async (log, html) => {
+  if (!ui.chat?.element || !html) return; // Ensure chat UI is loaded
+  console.log("TabChat: renderChatLog fired");
   if (html.querySelector('.tabbed-chat-tabs') === null) {
     const tabsHtml = `
       <nav class="tabbed-chat-tabs">
@@ -202,13 +208,15 @@ Hooks.on('renderChatLog', (log, html) => {
       <div class="tab-panel" id="whispers-panel"></div>
     `;
     const chatMessages = html.querySelector('.chat-messages');
-    if (chatMessages) chatMessages.insertAdjacentHTML('afterbegin', tabsHtml);
-    // Move existing messages
-    html.querySelectorAll('.message').forEach(el => {
-      const messageId = el.getAttribute('data-message-id');
-      const message = game.messages.get(messageId);
-      Hooks.call('renderChatMessageHTML', message, el);
-    });
+    if (chatMessages) {
+      chatMessages.insertAdjacentHTML('afterbegin', tabsHtml);
+      // Move existing messages
+      html.querySelectorAll('.message').forEach(el => {
+        const messageId = el.getAttribute('data-message-id');
+        const message = game.messages.get(messageId);
+        if (message) Hooks.call('renderChatMessageHTML', message, el);
+      });
+    }
   }
   // Attach tab click handlers
   html.querySelectorAll('.tab-button').forEach(button => {
