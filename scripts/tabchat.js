@@ -29,14 +29,11 @@ class TabbedChatManager {
     }
     TabbedChatManager._initialized = true;
     console.log(`${MODULE_ID} | Ready`);
-
-    // Force re-render of chat to ensure tabs are injected
-    ui.chat.render(true).catch((err) => console.error(`${MODULE_ID}: Error re-rendering chat:`, err));
   }
 
   static async injectTabs(app, html, data) {
-    if (!(html instanceof HTMLElement)) {
-      console.warn(`${MODULE_ID}: Expected HTMLElement in renderChatLog, got`, html);
+    if (!(html instanceof HTMLElement) || TabbedChatManager._initialized) {
+      console.log(`${MODULE_ID}: Skipping injection (already initialized or invalid HTML)`, html);
       return;
     }
 
@@ -62,6 +59,7 @@ class TabbedChatManager {
         if (ol) {
           TabbedChatManager._replaceMessageList($(ol), $html);
           obs.disconnect();
+          TabbedChatManager._initialized = true; // Mark as initialized after successful injection
         }
       });
       observer.observe(html, { childList: true, subtree: true });
@@ -70,16 +68,18 @@ class TabbedChatManager {
     }
 
     TabbedChatManager._replaceMessageList(defaultOl, $html);
+    TabbedChatManager._initialized = true; // Mark as initialized after successful injection
   }
 
   static _replaceMessageList(defaultOl, $html) {
     const tabHtml = `
       <div class="tabchat-container">
         <nav class="tabchat-nav">
-          <a class="tabchat-tab active" data-tab="ic">IC</a>
-          <a class="tabchat-tab" data-tab="ooc">OOC</a>
-          <a class="tabchat-tab" data-tab="rolls">Rolls</a>
-          <a class="tabchat-tab" data-tab="whisper">Whispers</a>
+          ${['ic', 'ooc', 'rolls', 'whisper'].map((tab) => `
+            <a class="tabchat-tab ${tab === 'ic' ? 'active' : ''}" data-tab="${tab}">
+              ${tab.toUpperCase()}
+            </a>
+          `).join('')}
         </nav>
         ${['ic', 'ooc', 'rolls', 'whisper'].map((tab) => `
           <section class="tabchat-panel ${tab === 'ic' ? 'active' : ''}" data-tab="${tab}">
@@ -98,8 +98,11 @@ class TabbedChatManager {
       }
     });
 
-    // Bind tab clicks
-    $html.find('.tabchat-tab').on('click', (event) => TabbedChatManager._activateTab(event.currentTarget.dataset.tab, $html));
+    // Bind tab clicks with event delegation
+    $html.find('.tabchat-nav').on('click', '.tabchat-tab', (event) => {
+      const tabName = event.currentTarget.dataset.tab;
+      TabbedChatManager._activateTab(tabName, $html);
+    });
 
     // Render existing messages
     const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
@@ -116,7 +119,7 @@ class TabbedChatManager {
     const tab = TabbedChatManager._getMessageTab(message);
     if (tab && TabbedChatManager.tabPanels[tab]?.length) {
       TabbedChatManager.tabPanels[tab].append(msgHtml);
-      if (TabbedChatManager._activeTab === tab) {
+      if (TabbedChatManager._initialized && TabbedChatManager._activeTab === tab) {
         TabbedChatManager._scrollBottom($html, tab);
       }
       // Highlight animation from tabbed-whispers
