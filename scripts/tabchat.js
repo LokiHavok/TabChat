@@ -317,13 +317,27 @@ class TabbedChatManager {
     const messageScene = message.speaker?.scene || message._messageScene;
     const currentUserId = game.user.id;
     
+    // Use author instead of deprecated user property
+    const messageAuthor = message.author?.id || message.author;
+    
+    // Debug logging to understand why messages are being skipped
+    console.log(`${MODULE_ID}: DEBUGGING message`, {
+      id: message.id,
+      tab: tab,
+      messageScene: messageScene,
+      currentScene: currentScene,
+      messageAuthor: messageAuthor,
+      currentUserId: currentUserId,
+      content: message.content?.substring(0, 50) + '...'
+    });
+    
     // Scene-based and permission filtering logic
     let shouldRender = true;
     
     if (tab === 'ic') {
       // IC (WORLD) messages: show if same scene OR if user is the author
       const isSameScene = (messageScene === currentScene);
-      const isAuthor = (message.user === currentUserId);
+      const isAuthor = (messageAuthor === currentUserId);
       shouldRender = isSameScene || isAuthor;
       console.log(`${MODULE_ID}: IC message check`, { 
         messageScene, 
@@ -339,7 +353,7 @@ class TabbedChatManager {
       } else {
         // Local OOC: show if same scene OR if user is the author
         const isSameScene = (messageScene === currentScene);
-        const isAuthor = (message.user === currentUserId);
+        const isAuthor = (messageAuthor === currentUserId);
         shouldRender = isSameScene || isAuthor;
         console.log(`${MODULE_ID}: Local OOC message check`, { 
           messageScene, 
@@ -351,7 +365,7 @@ class TabbedChatManager {
     } else if (tab === 'rolls') {
       // ROLLS: show if same scene OR if user is the author
       const isSameScene = (messageScene === currentScene);
-      const isAuthor = (message.user === currentUserId);
+      const isAuthor = (messageAuthor === currentUserId);
       shouldRender = isSameScene || isAuthor;
       console.log(`${MODULE_ID}: Rolls message check`, { 
         messageScene, 
@@ -367,7 +381,7 @@ class TabbedChatManager {
       } else {
         // Players only see whispers they're involved in
         const whisperTargets = message.whisper || [];
-        const isWhisperAuthor = (message.user === currentUserId);
+        const isWhisperAuthor = (messageAuthor === currentUserId);
         const isWhisperTarget = whisperTargets.includes(currentUserId);
         shouldRender = isWhisperAuthor || isWhisperTarget;
         console.log(`${MODULE_ID}: Whisper visibility check`, { 
@@ -376,7 +390,7 @@ class TabbedChatManager {
           shouldRender,
           whisperTargets,
           currentUserId,
-          messageUser: message.user
+          messageAuthor: messageAuthor
         });
       }
     }
@@ -384,14 +398,19 @@ class TabbedChatManager {
     if (!shouldRender) {
       console.log(`${MODULE_ID}: Skipping message rendering`, { 
         tab, 
-        reason: tab === 'whisper' ? 'not involved in whisper' : 'wrong scene',
+        reason: tab === 'whisper' ? 'not involved in whisper' : 'wrong scene/author',
         messageScene, 
-        currentScene 
+        currentScene,
+        messageAuthor,
+        currentUserId
       });
       return;
     }
     
-    console.log(`${MODULE_ID}: RENDERING message to ${tab} tab`, { messageId: message.id, content: message.content });
+    console.log(`${MODULE_ID}: ✅ RENDERING message to ${tab} tab`, { 
+      messageId: message.id, 
+      content: message.content?.substring(0, 30) + '...' 
+    });
     
     if (tab && TabbedChatManager.tabPanels[tab]?.length) {
       // Process chat commands by removing the command prefix
