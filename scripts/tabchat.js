@@ -135,13 +135,13 @@ class TabbedChatManager {
 
     let rendered;
     try {
-      rendered = await message.render(false, { editable: true });
-      console.log(`${MODULE_ID}: Rendered type`, { type: typeof rendered, value: rendered });
+      rendered = await message.render(); // Try default render first
+      console.log(`${MODULE_ID}: Rendered type (default)`, { type: typeof rendered, value: rendered });
       if (!rendered) {
         throw new Error('Render returned undefined');
       }
     } catch (e) {
-      console.error(`${MODULE_ID}: Error rendering message`, {
+      console.error(`${MODULE_ID}: Error rendering message (default)`, {
         error: e.message,
         stack: e.stack,
         message: {
@@ -154,11 +154,11 @@ class TabbedChatManager {
           data: message.data || 'Data unavailable'
         }
       });
-      // Delayed retry
+      // Delayed retry with alternative
       await new Promise(resolve => setTimeout(resolve, 1000));
       try {
-        rendered = await message.render(false, { editable: true });
-        console.log(`${MODULE_ID}: Second render type`, { type: typeof rendered, value: rendered });
+        rendered = await message.render(true); // Try with chat bubble render
+        console.log(`${MODULE_ID}: Rendered type (chat bubble)`, { type: typeof rendered, value: rendered });
         if (!rendered) {
           console.warn(`${MODULE_ID}: Second render attempt failed for message`, { id: message.id });
           // Force fallback HTML
@@ -305,8 +305,9 @@ Hooks.on('renderChatLog', async (app, html, data) => {
   await TabbedChatManager.injectTabs(app, html, data);
 });
 
-// Prevent Foundry's default appending
-Hooks.on('renderChatMessage', (message, html, data) => {
+// Prevent Foundry's default appending with updated hook
+Hooks.on('renderChatMessageHTML', (message, html, data) => {
+  // Prevent default appending by returning false
   return false;
 });
 
@@ -317,7 +318,7 @@ Hooks.on('createChatMessage', async (message, html, data) => {
 
 // Handle updates
 Hooks.on('updateChatMessage', async (message, update, options, userId) => {
-  const msgHtml = $(await message.render(false, { editable: true })); // Wrap render output
+  const msgHtml = $(await message.render()); // Revert to default render for updates
   await TabbedChatManager.updateMessage(message, msgHtml, $(ui.chat.element));
 });
 
