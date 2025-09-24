@@ -1,35 +1,65 @@
-.tabbed-chat-tabs {
-display: flex;
-border-bottom: 1px solid #ccc;
+/* Tabbed Chat Styles */
+.tabchat-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
-.tab-button {
-padding: 8px;
-cursor: pointer;
-background: #f0f0f0;
-margin-right: 2px;
+
+.tabchat-nav {
+  display: flex;
+  border-bottom: 1px solid var(--color-border-primary);
+  background: var(--color-bg-primary);
+  flex-shrink: 0;
 }
-.tab-button.active {
-background: #007acc;
-color: white;
+
+.tabchat-tab {
+  padding: 8px 12px;
+  text-decoration: none;
+  color: var(--color-text-light-primary);
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: var(--font-size-12);
+  transition: background 0.2s;
 }
-.tab-panel {
-display: none;
-max-height: 400px;
-overflow-y: auto;
+
+.tabchat-tab:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
-.tab-panel.active {
-display: block;
+
+.tabchat-tab.active {
+  background: var(--color-link-hover);
+  color: #fff;
+  border-bottom: 2px solid var(--color-link-default);
 }
-.chat-messages {
-position: relative;
+
+.tabchat-panel {
+  display: none;
+  flex: 1;
+  overflow: hidden;
 }
-.phone-eavesdrop {
-font-style: italic;
-opacity: 0.8;
+
+.tabchat-panel.active {
+  display: flex;
+  flex-direction: column;
 }
-.tab-panel.message-list {
-list-style: none;
-padding: 0;
-margin: 0;
-/* Add any original ol#chat-log styles here if needed */
+
+.tabchat-panel ol.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+/* Ensure chat messages fit */
+.tabchat-panel .chat-message {
+  margin-bottom: 8px;
+}
+
+/* Optional: Compact mode for smaller tabs */
+@media (max-height: 600px) {
+  .tabchat-panel ol.chat-messages {
+    max-height: 300px;
+  }
 }
