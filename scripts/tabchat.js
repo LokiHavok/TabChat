@@ -14,11 +14,16 @@ class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
     const html = await super._renderInner(data);
 
     const $html = $(html);
-    const defaultOl = $html.find('ol.chat-messages');
+    let defaultOl = $html.find('ol.chat-messages');
     if (!defaultOl.length) {
-      console.warn(`${MODULE_ID}: No chat-messages OL found`);
-      return html;
+      defaultOl = $html.find('.chat-messages-container ol') || $html.find('ol');
+      if (!defaultOl.length) {
+        console.error(`${MODULE_ID}: No chat-messages OL found in DOM`, { html: $html.html() });
+        return html; // Fallback to default if no OL exists
+      }
     }
+
+    console.log(`${MODULE_ID}: Found default OL, replacing with tabs`, { olCount: defaultOl.length });
 
     const tabHtml = `
       <div class="tabchat-container">
@@ -38,9 +43,18 @@ class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
     `;
     defaultOl.replaceWith(tabHtml);
 
+    // Verify injection
+    const $tabContainer = $html.find('.tabchat-container');
+    if (!$tabContainer.length) {
+      console.error(`${MODULE_ID}: Tab container not injected`, { html: $html.html() });
+      return html;
+    }
+    console.log(`${MODULE_ID}: Tab container injected successfully`, { tabCount: $html.find('.tabchat-tab').length });
+
     // Cache panels
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
       this.tabPanels[tab] = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
+      console.log(`${MODULE_ID}: Cached panel for ${tab}`, { exists: !!this.tabPanels[tab].length });
     });
 
     // Bind clicks
@@ -72,12 +86,15 @@ class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
 
     const tab = this._getMessageTab(message);
     if (tab && this.tabPanels[tab]) {
+      console.log(`${MODULE_ID}: Rendering message to ${tab} tab`, { id: message.id, content: message.content });
       this.tabPanels[tab].append(msgHtml);
       if (this._activeTab === tab) {
         this._scrollBottom(tab);
       }
       msgHtml.addClass('tabbed-whispers-highlight');
       setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
+    } else {
+      console.warn(`${MODULE_ID}: No valid tab or panel for message`, { tab, panels: this.tabPanels, message: { id: message.id, type: message.type } });
     }
   }
 
