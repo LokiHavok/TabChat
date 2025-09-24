@@ -1,7 +1,7 @@
 {
   "id": "tabchat",
   "title": "TabChat",
-  "description": "Adds chat tabs for IC (proximity-based with /s, /l, /p commands), OOC (local or /global, /gooc), Rolls, and Whispers.",
+  "description": "A 4-tabbed chat log: IC (proximity/scene), OOC (scene/global), Rolls, and Whispers",
   "version": "1.0.0",
   "compatibility": {
     "minimum": "13",
