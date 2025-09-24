@@ -85,11 +85,11 @@ class TabbedChatLog extends ChatLog {
       if (!tokenDoc) return 'ooc';
 
       const controlledTokens = canvas?.tokens?.controlled;
-      if (controlledTokens.length === 0) return 'ic'; // No controlled token -> full IC visibility
+      if (controlledTokens.length === 0 || game.user.isGM) return 'ic'; // No controlled token or GM -> full IC visibility
 
       // Proximity check (using first controlled token)
       const controlled = controlledTokens[0];
-      const distance = canvas.dimensions.distanceBetween(tokenDoc.center, controlled.center);
+      const distance = canvas.grid.measureDistance(tokenDoc.center, controlled.center);
       const range = game.settings.get('tabchat', 'proximityRange') || 30;
       if (distance <= range) return 'ic';
     }
@@ -181,17 +181,13 @@ Hooks.once('init', () => {
     default: 30,
     type: Number
   });
-
-  // Optional: Register OOC prefix detection if you want manual overrides (e.g., "/ooc message")
-  // Extend _getMessageTab to check if content.startsWith('/ooc ') -> return 'ooc'
 });
 
 Hooks.once('ready', () => {
   // Replace core ChatLog with tabbed version
-  if (ui.chat instanceof TabbedChatLog) return;
-  const chatOptions = foundry.utils.deepClone(ui.chat.options || {});
-  ui.chat.close({ force: true });
+  if (ui.chat instanceof TabbedChatLog) return; // Prevent multiple replacements
+  const chatOptions = foundry.utils.deepClone(ui.chat?.options || {});
+  ui.chat.close({ force: true }).catch((err) => console.warn("Error closing chat:", err));
   ui.chat = new TabbedChatLog(chatOptions);
-  ui.chat.render(true);
-  ui.sidebar._tabs[3] = ui.chat; // Ensure sidebar tab reference updates (index for chat)
+  ui.chat.render(true).catch((err) => console.error("Error rendering TabbedChatLog:", err));
 });
