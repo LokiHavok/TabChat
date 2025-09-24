@@ -153,12 +153,14 @@ class TabbedChatManager {
           data: message.data || 'Data unavailable'
         }
       });
-      // Retry rendering once if it fails
+      // Delayed retry
+      await new Promise(resolve => setTimeout(resolve, 1000));
       try {
         msgHtml = await message.render();
         if (!msgHtml) {
           console.warn(`${MODULE_ID}: Second render attempt failed for message`, { id: message.id });
-          return;
+          // Fallback HTML if render fails
+          msgHtml = $(`<li class="chat-message" data-message-id="${message.id}"><div class="message-content">${message.content || 'Failed to render'}</div></li>`);
         }
       } catch (e2) {
         console.error(`${MODULE_ID}: Second render attempt failed`, {
@@ -166,7 +168,8 @@ class TabbedChatManager {
           stack: e2.stack,
           message: { id: message.id }
         });
-        return;
+        // Fallback HTML
+        msgHtml = $(`<li class="chat-message" data-message-id="${message.id}"><div class="message-content">${message.content || 'Failed to render'}</div></li>`);
       }
     }
 
@@ -197,7 +200,7 @@ class TabbedChatManager {
           if (TabbedChatManager._initialized && TabbedChatManager._activeTab === tab) {
             TabbedChatManager._scrollBottom($html, tab);
           }
-          // Highlight animation from tabbed-whispers
+          // Highlight animation
           msgHtml.addClass('tabbed-whispers-highlight');
           setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
         } catch (e) {
