@@ -103,67 +103,75 @@ class TabbedChatManager {
   }
 
   // ---------------- Hooks ----------------
-  // Inject tabs on chat render (renderChatLog still works; html may be HTMLElement or jQuery)
-  Hooks.on('renderChatLog', async (app, html, data) => {
-    await TabbedChatManager.injectTabs(app, html, data);
-  });
-  // Mark pre-creation so we can suppress Foundry UI append in render hook
-  Hooks.on('preCreateChatMessage', (doc, data, options, userId) => {
-    // Attach flag to the document being created; Foundry will pass that same doc to create hooks.
-    try {
-      if (doc) doc._customHandled = true;
-      console.log(`${MODULE_ID}: preCreateChatMessage flagged for custom handling`, { id: doc?.id, content: data?.content });
-    } catch (err) {
-      console.warn(`${MODULE_ID}: preCreateChatMessage handler error`, err);
-    }
-  });
-  // Intercept Foundry's render hook (v13 uses HTMLElement)
-  Hooks.on('renderChatMessageHTML', (message, html, data) => {
-    try {
-      console.log(`${MODULE_ID}: Intercepting renderChatMessageHTML`, { id: message.id, htmlExists: !!html, custom: !!message._customHandled });
-      if (message._customHandled) {
-        // html may be an HTMLElement or jQuery object
-        if (html) {
-          if (html instanceof HTMLElement && typeof html.remove === 'function') html.remove();
-          else if (html && typeof html.remove === 'function') html.remove(); // jQuery
+  static setupHooks() {
+    // Inject tabs on chat render (renderChatLog still works; html may be HTMLElement or jQuery)
+    Hooks.on('renderChatLog', async (app, html, data) => {
+      await TabbedChatManager.injectTabs(app, html, data);
+    });
+    
+    // Mark pre-creation so we can suppress Foundry UI append in render hook
+    Hooks.on('preCreateChatMessage', (doc, data, options, userId) => {
+      // Attach flag to the document being created; Foundry will pass that same doc to create hooks.
+      try {
+        if (doc) doc._customHandled = true;
+        console.log(`${MODULE_ID}: preCreateChatMessage flagged for custom handling`, { id: doc?.id, content: data?.content });
+      } catch (err) {
+        console.warn(`${MODULE_ID}: preCreateChatMessage handler error`, err);
+      }
+    });
+    
+    // Intercept Foundry's render hook (v13 uses HTMLElement)
+    Hooks.on('renderChatMessageHTML', (message, html, data) => {
+      try {
+        console.log(`${MODULE_ID}: Intercepting renderChatMessageHTML`, { id: message.id, htmlExists: !!html, custom: !!message._customHandled });
+        if (message._customHandled) {
+          // html may be an HTMLElement or jQuery object
+          if (html) {
+            if (html instanceof HTMLElement && typeof html.remove === 'function') html.remove();
+            else if (html && typeof html.remove === 'function') html.remove(); // jQuery
+          }
+          // Returning false prevents Foundry's default append logic for this message's rendered HTML
+          return false;
         }
-        // Returning false prevents Foundry's default append logic for this message's rendered HTML
-        return false;
+        return true;
+      } catch (err) {
+        console.error(`${MODULE_ID}: Error in renderChatMessageHTML hook`, err);
+        // If something goes wrong, don't block Foundry
+        return true;
       }
-      return true;
-    } catch (err) {
-      console.error(`${MODULE_ID}: Error in renderChatMessageHTML hook`, err);
-      // If something goes wrong, don't block Foundry
-      return true;
-    }
-  });
-  // Create/Update/Delete handlers
-  Hooks.on('createChatMessage', async (message, html, data) => {
-    await TabbedChatManager.renderMessage(message, $(ui.chat.element));
-  });
-  Hooks.on('updateChatMessage', async (message, update, options, userId) => {
-    const msgHtml = $(await message.renderHTML());
-    await TabbedChatManager.updateMessage(message, msgHtml, $(ui.chat.element));
-  });
-  Hooks.on('deleteChatMessage', (message, options, userId) => {
-    TabbedChatManager.deleteMessage(message.id, $(ui.chat.element));
-  });
-  // Optional: restore originals on unload/hot-reload
-  Hooks.on('unload', () => {
-    try {
-      if (ChatLog.prototype._tabchat_originalPostOne) {
-        ChatLog.prototype._postOne = ChatLog.prototype._tabchat_originalPostOne;
-        delete ChatLog.prototype._tabchat_originalPostOne;
+    });
+    
+    // Create/Update/Delete handlers
+    Hooks.on('createChatMessage', async (message, html, data) => {
+      await TabbedChatManager.renderMessage(message, $(ui.chat.element));
+    });
+    
+    Hooks.on('updateChatMessage', async (message, update, options, userId) => {
+      const msgHtml = $(await message.renderHTML());
+      await TabbedChatManager.updateMessage(message, msgHtml, $(ui.chat.element));
+    });
+    
+    Hooks.on('deleteChatMessage', (message, options, userId) => {
+      TabbedChatManager.deleteMessage(message.id, $(ui.chat.element));
+    });
+    
+    // Optional: restore originals on unload/hot-reload
+    Hooks.on('unload', () => {
+      try {
+        if (ChatLog.prototype._tabchat_originalPostOne) {
+          ChatLog.prototype._postOne = ChatLog.prototype._tabchat_originalPostOne;
+          delete ChatLog.prototype._tabchat_originalPostOne;
+        }
+        if (ui.chat && ui.chat._tabchat_originalPostOne) {
+          ui.chat._postOne = ui.chat._tabchat_originalPostOne;
+          delete ui.chat._tabchat_originalPostOne;
+        }
+        console.log(`${MODULE_ID} | Restored original ChatLog._postOne on unload`);
+      } catch (err) {
+        console.warn(`${MODULE_ID} | Error restoring originals on unload`, err);
       }
-      if (ui.chat && ui.chat._tabchat_originalPostOne) {
-        ui.chat._postOne = ui.chat._tabchat_originalPostOne;
-        delete ui.chat._tabchat_originalPostOne;
-      }
-      console.log(`${MODULE_ID} | Restored original ChatLog._postOne on unload`);
-    } catch (err) {
-      console.warn(`${MODULE_ID} | Error restoring originals on unload`, err);
-    }
-  });
+    });
+  }
 
   // ---------------- Core Methods ----------------
   static async injectTabs(app, html, data) {
@@ -403,5 +411,7 @@ class TabbedChatManager {
 
 // Module Initialization
 Hooks.once('init', TabbedChatManager.init);
-
 Hooks.once('ready', TabbedChatManager.ready);
+
+// Setup all hooks after the class is defined
+TabbedChatManager.setupHooks();
