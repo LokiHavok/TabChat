@@ -40,12 +40,17 @@ class TabbedChatManager {
     if (!defaultOl.length) {
       defaultOl = $html.find('.chat-messages-container ol') || $html.find('ol');
       if (!defaultOl.length) {
-        console.error(`${MODULE_ID}: No chat-messages OL found`, { html: $html.html() });
-        return;
+        console.warn(`${MODULE_ID}: No chat-messages OL found initially, setting up observer`, { html: $html.html() });
+        await TabbedChatManager._waitForChatOl($html);
+        defaultOl = $html.find('ol.chat-messages') || $html.find('.chat-messages-container ol') || $html.find('ol');
+        if (!defaultOl.length) {
+          console.error(`${MODULE_ID}: Failed to find OL after waiting`, { html: $html.html() });
+          return;
+        }
       }
     }
 
-    console.log(`${MODULE_ID}: Injecting tabs into DOM`, { olCount: defaultOl.length });
+    console.log(`${MODULE_ID}: Injecting tabs into DOM`, { olCount: defaultOl.length, htmlBefore: $html.html() });
 
     const tabHtml = `
       <div class="tabchat-container">
@@ -67,7 +72,7 @@ class TabbedChatManager {
 
     const $tabContainer = $html.find('.tabchat-container');
     if (!$tabContainer.length) {
-      console.error(`${MODULE_ID}: Failed to inject tab container`, { html: $html.html() });
+      console.error(`${MODULE_ID}: Failed to inject tab container`, { htmlAfter: $html.html() });
       return;
     }
     console.log(`${MODULE_ID}: Tabs injected successfully`, { tabCount: $html.find('.tabchat-tab').length });
@@ -84,6 +89,25 @@ class TabbedChatManager {
 
     TabbedChatManager._scrollBottom($html);
     TabbedChatManager._initialized = true;
+  }
+
+  static _waitForChatOl($html) {
+    return new Promise((resolve) => {
+      const observer = new MutationObserver((mutations, obs) => {
+        const ol = $html.find('ol.chat-messages') || $html.find('.chat-messages-container ol') || $html.find('ol');
+        if (ol.length) {
+          console.log(`${MODULE_ID}: Chat OL detected by observer`, { olCount: ol.length });
+          obs.disconnect();
+          resolve();
+        }
+      });
+      observer.observe($html[0], { childList: true, subtree: true });
+      setTimeout(() => {
+        observer.disconnect();
+        console.warn(`${MODULE_ID}: Observer timed out waiting for OL`);
+        resolve();
+      }, 5000); // 5-second timeout
+    });
   }
 
   static async renderMessage(message, $html) {
