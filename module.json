@@ -1,0 +1,24 @@
+{
+  "id": "tabchat",
+  "title": "TabChat",
+  "description": "Adds chat tabs for IC (proximity-based with /s, /l, /p commands), OOC (local or /global, /gooc), Rolls, and Whispers.",
+  "version": "1.0.0",
+  "compatibility": {
+    "minimum": "13",
+    "verified": "13"
+  },
+  "scripts": ["scripts/tabchat.js"],
+  "styles": ["styles/tabchat.css"],
+  "packs": [],
+  "authors": [
+    {
+      "name": "LokiHavok",
+      "email": "lokihavok@gmail.com",
+      "discord": "lokihavok",
+      "flags": {}
+    }
+  ],
+  "url": "https://github.com/yourusername/tabchat",
+  "manifest": "https://raw.githubusercontent.com/yourusername/tabchat/main/module.json",
+  "download": "https://github.com/yourusername/tabchat/archive/main.zip"
+}
