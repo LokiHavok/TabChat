@@ -89,6 +89,9 @@ class TabbedChatManager {
     `;
     defaultOl.replaceWith(tabHtml);
 
+    // Log the injected DOM to verify order
+    console.log(`${MODULE_ID}: Injected tab order`, $html.find('.tabchat-nav .tabchat-tab').map((i, el) => $(el).data('tab')).get());
+
     // Cache tab OL elements with validation
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
       const panel = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
