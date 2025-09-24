@@ -29,6 +29,13 @@ class TabbedChatManager {
     }
     TabbedChatManager._initialized = true;
     console.log(`${MODULE_ID} | Ready`);
+
+    // Render existing messages after initialization
+    const $html = $(ui.chat.element);
+    const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
+    for (const message of messages) {
+      TabbedChatManager.renderMessage(message, $html);
+    }
   }
 
   static async injectTabs(app, html, data) {
@@ -89,7 +96,7 @@ class TabbedChatManager {
     `;
     defaultOl.replaceWith(tabHtml);
 
-    // Log the injected DOM to verify order
+    // Log the injected tab order to verify
     console.log(`${MODULE_ID}: Injected tab order`, $html.find('.tabchat-nav .tabchat-tab').map((i, el) => $(el).data('tab')).get());
 
     // Cache tab OL elements with validation
@@ -109,12 +116,6 @@ class TabbedChatManager {
       TabbedChatManager._activateTab(tabName, $html);
     });
 
-    // Render existing messages
-    const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
-    for (const message of messages) {
-      TabbedChatManager.renderMessage(message, $html);
-    }
-
     // Initial scroll
     TabbedChatManager._scrollBottom($html);
   }
@@ -127,7 +128,16 @@ class TabbedChatManager {
 
     const msgHtml = await message.render();
     if (!msgHtml || typeof msgHtml !== 'object' || !('addClass' in msgHtml)) {
-      console.error(`${MODULE_ID}: Invalid msgHtml from render()`, { msgHtml, message: { id: message.id, content: message.content, type: message.type } });
+      console.error(`${MODULE_ID}: Invalid msgHtml from render()`, {
+        msgHtml,
+        message: {
+          id: message.id,
+          content: message.content,
+          type: message.type,
+          speaker: message.speaker,
+          whisper: message.whisper
+        }
+      });
       return;
     }
 
