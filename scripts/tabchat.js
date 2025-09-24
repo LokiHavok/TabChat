@@ -30,8 +30,12 @@ class TabbedChatManager {
     TabbedChatManager._initialized = true;
     console.log(`${MODULE_ID} | Ready`);
 
-    // Delay as a fallback (will be overridden by createChatMessage)
+    // Delay as a fallback
     setTimeout(() => {
+      if (!ui.chat?.element) {
+        console.warn(`${MODULE_ID}: UI not ready, skipping existing message rendering`);
+        return;
+      }
       const $html = $(ui.chat.element);
       const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
       for (const message of messages) {
@@ -149,7 +153,21 @@ class TabbedChatManager {
           data: message.data || 'Data unavailable'
         }
       });
-      return;
+      // Retry rendering once if it fails
+      try {
+        msgHtml = await message.render();
+        if (!msgHtml) {
+          console.warn(`${MODULE_ID}: Second render attempt failed for message`, { id: message.id });
+          return;
+        }
+      } catch (e2) {
+        console.error(`${MODULE_ID}: Second render attempt failed`, {
+          error: e2.message,
+          stack: e2.stack,
+          message: { id: message.id }
+        });
+        return;
+      }
     }
 
     if (!msgHtml || typeof msgHtml !== 'object' || !('addClass' in msgHtml)) {
@@ -167,26 +185,35 @@ class TabbedChatManager {
     }
 
     const tab = TabbedChatManager._getMessageTab(message);
-    if (tab && TabbedChatManager.tabPanels[tab]?.length) {
-      try {
-        TabbedChatManager.tabPanels[tab].append(msgHtml);
-        if (TabbedChatManager._initialized && TabbedChatManager._activeTab === tab) {
-          TabbedChatManager._scrollBottom($html, tab);
+    if (tab) {
+      // Ensure panel exists, reinitialize if necessary
+      if (!TabbedChatManager.tabPanels[tab]?.length) {
+        console.warn(`${MODULE_ID}: Tab panel for ${tab} not found, reinitializing`);
+        TabbedChatManager._replaceMessageList($html.find('ol.chat-messages'), $html);
+      }
+      if (TabbedChatManager.tabPanels[tab]?.length) {
+        try {
+          TabbedChatManager.tabPanels[tab].append(msgHtml);
+          if (TabbedChatManager._initialized && TabbedChatManager._activeTab === tab) {
+            TabbedChatManager._scrollBottom($html, tab);
+          }
+          // Highlight animation from tabbed-whispers
+          msgHtml.addClass('tabbed-whispers-highlight');
+          setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
+        } catch (e) {
+          console.error(`${MODULE_ID}: Error appending message`, {
+            error: e.message,
+            stack: e.stack,
+            tab: tab,
+            panel: TabbedChatManager.tabPanels[tab],
+            message: { id: message.id, content: message.content }
+          });
         }
-        // Highlight animation from tabbed-whispers
-        msgHtml.addClass('tabbed-whispers-highlight');
-        setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
-      } catch (e) {
-        console.error(`${MODULE_ID}: Error appending message`, {
-          error: e.message,
-          stack: e.stack,
-          tab: tab,
-          panel: TabbedChatManager.tabPanels[tab],
-          message: { id: message.id, content: message.content }
-        });
+      } else {
+        console.warn(`${MODULE_ID}: No valid tab panel after reinitialization`, { tab, message: { id: message.id, content: message.content } });
       }
     } else {
-      console.warn(`${MODULE_ID}: No valid tab panel for message`, { tab, message: { id: message.id, content: message.content, type: message.type }, panels: TabbedChatManager.tabPanels });
+      console.warn(`${MODULE_ID}: No valid tab for message`, { message: { id: message.id, content: message.content, type: message.type } });
     }
   }
 
