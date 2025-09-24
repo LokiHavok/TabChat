@@ -100,6 +100,15 @@ class TabbedChatManager {
     
     Hooks.on('preCreateChatMessage', (doc, data, options, userId) => {
       console.log(`${MODULE_ID}: preCreateChatMessage`, { id: doc?.id, content: data?.content });
+      
+      // Handle /b command to bypass Foundry's command processing
+      if (data.content && data.content.startsWith('/b ')) {
+        // Mark this message as an OOC bypass
+        doc._tabchatBypass = true;
+        // Remove the /b command from the content and add [OOC] prefix
+        data.content = '[OOC] ' + data.content.substring(3);
+        console.log(`${MODULE_ID}: Processed /b command, new content:`, data.content);
+      }
     });
     
     // Suppress Foundry's default render when tabbed UI is active
@@ -198,34 +207,40 @@ class TabbedChatManager {
       'visibility': 'hidden'
     });
     
-    // CORRECT tab order: WORLD, OOC, GAME, WHISPER
+    // CORRECT tab order: WORLD, OOC, GAME, MESSAGES
     const tabs = [
       { id: 'ic', label: 'WORLD' },
       { id: 'ooc', label: 'OOC' },
       { id: 'rolls', label: 'GAME' },
-      { id: 'whisper', label: 'WHISPER' }
+      { id: 'whisper', label: 'MESSAGES' }
     ];
     
     const tabHtml = `
       <div class="tabchat-container">
-        <nav class="tabchat-nav">
-          ${tabs.map((tab) => `
-            <a class="tabchat-tab ${tab.id === 'ic' ? 'active' : ''}" data-tab="${tab.id}">
-              ${tab.label}
-            </a>
-          `).join('')}
+        <nav class="tabchat-nav" style="display: flex; flex-direction: row;">
+          <a class="tabchat-tab active" data-tab="ic" style="order: 1;">WORLD</a>
+          <a class="tabchat-tab" data-tab="ooc" style="order: 2;">OOC</a>
+          <a class="tabchat-tab" data-tab="rolls" style="order: 3;">GAME</a>
+          <a class="tabchat-tab" data-tab="whisper" style="order: 4;">MESSAGES</a>
         </nav>
-        ${tabs.map((tab) => `
-          <section class="tabchat-panel ${tab.id === 'ic' ? 'active' : ''}" data-tab="${tab.id}">
-            <ol class="chat-messages"></ol>
-          </section>
-        `).join('')}
+        <section class="tabchat-panel active" data-tab="ic">
+          <ol class="chat-messages"></ol>
+        </section>
+        <section class="tabchat-panel" data-tab="ooc">
+          <ol class="chat-messages"></ol>
+        </section>
+        <section class="tabchat-panel" data-tab="rolls">
+          <ol class="chat-messages"></ol>
+        </section>
+        <section class="tabchat-panel" data-tab="whisper">
+          <ol class="chat-messages"></ol>
+        </section>
       </div>
     `;
     
     // Insert tabbed interface AFTER the original ol
     defaultOl.after(tabHtml);
-    console.log(`${MODULE_ID}: CORE - Added tabbed interface with correct order: WORLD | OOC | GAME | WHISPER`);
+    console.log(`${MODULE_ID}: CORE - Added tabbed interface with correct order: WORLD | OOC | GAME | MESSAGES`);
 
     // Cache tab panels
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
@@ -353,10 +368,16 @@ class TabbedChatManager {
     // Handle whispers
     if (message.whisper?.length > 0) return 'whisper';
     
-    // Check for /b bypass command (with debugging)
+    // Check for processed /b bypass command
+    if (message._tabchatBypass) {
+      console.log(`${MODULE_ID}: Bypass flag detected, routing to OOC`);
+      return 'ooc';
+    }
+    
+    // Legacy check for unprocessed /b command (fallback)
     const content = message.content || '';
     if (content.startsWith('/b ')) {
-      console.log(`${MODULE_ID}: /b command detected, routing to OOC`, { content: content.substring(0, 20) });
+      console.log(`${MODULE_ID}: Unprocessed /b command detected, routing to OOC`, { content: content.substring(0, 20) });
       return 'ooc';
     }
     
