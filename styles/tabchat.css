@@ -13,6 +13,8 @@
   box-shadow: 0 0 10px red;
   display: flex;
   justify-content: center; /* Center the tabs */
+  flex-direction: row; /* Ensure left-to-right order */
+  flex-wrap: nowrap; /* Prevent wrapping */
 }
 
 .tabchat-tab {
@@ -26,7 +28,7 @@
   transition: background 0.2s;
   flex: 1;
   text-align: center; /* Center text within each tab */
-  max-width: 100px; /* Optional: Limit width for better centering */
+  max-width: 120px; /* Adjusted for better spacing with 4 tabs */
 }
 
 .tabchat-tab:hover {
