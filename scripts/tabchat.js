@@ -38,7 +38,7 @@ class TabbedChatManager {
         console.log(`${MODULE_ID}: Rendering existing message (fallback)`, { id: message.id, data: message.data });
         TabbedChatManager.renderMessage(message, $html);
       }
-    }, 5000); // Increased to 5-second delay
+    }, 5000); // 5-second delay
   }
 
   static async injectTabs(app, html, data) {
@@ -146,7 +146,7 @@ class TabbedChatManager {
           speaker: message.speaker,
           whisper: message.whisper,
           isRoll: message.isRoll,
-          data: message.data || 'Data unavailable' // Ensure data is logged
+          data: message.data || 'Data unavailable'
         }
       });
       return;
@@ -168,13 +168,23 @@ class TabbedChatManager {
 
     const tab = TabbedChatManager._getMessageTab(message);
     if (tab && TabbedChatManager.tabPanels[tab]?.length) {
-      TabbedChatManager.tabPanels[tab].append(msgHtml);
-      if (TabbedChatManager._initialized && TabbedChatManager._activeTab === tab) {
-        TabbedChatManager._scrollBottom($html, tab);
+      try {
+        TabbedChatManager.tabPanels[tab].append(msgHtml);
+        if (TabbedChatManager._initialized && TabbedChatManager._activeTab === tab) {
+          TabbedChatManager._scrollBottom($html, tab);
+        }
+        // Highlight animation from tabbed-whispers
+        msgHtml.addClass('tabbed-whispers-highlight');
+        setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
+      } catch (e) {
+        console.error(`${MODULE_ID}: Error appending message`, {
+          error: e.message,
+          stack: e.stack,
+          tab: tab,
+          panel: TabbedChatManager.tabPanels[tab],
+          message: { id: message.id, content: message.content }
+        });
       }
-      // Highlight animation from tabbed-whispers
-      msgHtml.addClass('tabbed-whispers-highlight');
-      setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
     } else {
       console.warn(`${MODULE_ID}: No valid tab panel for message`, { tab, message: { id: message.id, content: message.content, type: message.type }, panels: TabbedChatManager.tabPanels });
     }
