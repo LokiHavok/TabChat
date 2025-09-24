@@ -35,9 +35,10 @@ class TabbedChatManager {
       const $html = $(ui.chat.element);
       const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
       for (const message of messages) {
+        console.log(`${MODULE_ID}: Rendering message`, { id: message.id, data: message.data });
         TabbedChatManager.renderMessage(message, $html);
       }
-    }, 1000); // 1-second delay
+    }, 2000); // Increased to 2-second delay
   }
 
   static async injectTabs(app, html, data) {
@@ -143,7 +144,9 @@ class TabbedChatManager {
           content: message.content,
           type: message.type,
           speaker: message.speaker,
-          whisper: message.whisper
+          whisper: message.whisper,
+          isRoll: message.isRoll,
+          data: message.data // Log full data for debugging
         }
       });
       return;
