@@ -3,27 +3,49 @@
 
 const MODULE_ID = 'tabchat';
 
-class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
-  constructor(options = {}) {
-    super(options);
-    this._activeTab = 'ic';
-    this.tabPanels = {};
+class TabbedChatManager {
+  static tabPanels = {};
+  static _activeTab = 'ic';
+  static _initialized = false;
+
+  static init() {
+    game.settings.register(MODULE_ID, 'proximityRange', {
+      name: 'IC Proximity Range',
+      hint: 'Max distance (units) for IC messages to appear (default: 30).',
+      scope: 'world',
+      config: true,
+      default: 30,
+      type: Number
+    });
+    console.log(`${MODULE_ID} | Initialized settings`);
   }
 
-  async _renderInner(data) {
-    const html = await super._renderInner(data);
+  static ready() {
+    if (TabbedChatManager._initialized) {
+      console.log(`${MODULE_ID} | Already initialized, skipping`);
+      return;
+    }
+    TabbedChatManager._initialized = true;
+    console.log(`${MODULE_ID} | Ready`);
+  }
+
+  static async injectTabs(app, html, data) {
+    if (!(html instanceof HTMLElement) || TabbedChatManager._initialized) {
+      console.log(`${MODULE_ID}: Skipping injection (already initialized or invalid HTML)`, { html });
+      return;
+    }
 
     const $html = $(html);
     let defaultOl = $html.find('ol.chat-messages');
     if (!defaultOl.length) {
       defaultOl = $html.find('.chat-messages-container ol') || $html.find('ol');
       if (!defaultOl.length) {
-        console.error(`${MODULE_ID}: No chat-messages OL found in DOM`, { htmlContent: $html.html() });
-        return this._forceFallbackChat($html, html); // Fallback if no OL
+        console.error(`${MODULE_ID}: No chat-messages OL found`, { html: $html.html() });
+        return;
       }
     }
 
-    console.log(`${MODULE_ID}: Initial DOM state`, { olCount: defaultOl.length, htmlBefore: $html.html() });
+    console.log(`${MODULE_ID}: Injecting tabs into DOM`, { olCount: defaultOl.length });
 
     const tabHtml = `
       <div class="tabchat-container">
@@ -41,48 +63,32 @@ class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
         `).join('')}
       </div>
     `;
-    const $tabHtml = $(tabHtml);
-    defaultOl.replaceWith($tabHtml);
+    defaultOl.replaceWith(tabHtml);
 
-    // Verify injection
     const $tabContainer = $html.find('.tabchat-container');
     if (!$tabContainer.length) {
-      console.error(`${MODULE_ID}: Tab container not injected`, { htmlAfter: $html.html() });
-      return this._forceFallbackChat($html, html);
+      console.error(`${MODULE_ID}: Failed to inject tab container`, { html: $html.html() });
+      return;
     }
-    console.log(`${MODULE_ID}: Tab container injected`, { tabCount: $html.find('.tabchat-tab').length, htmlAfter: $html.html() });
+    console.log(`${MODULE_ID}: Tabs injected successfully`, { tabCount: $html.find('.tabchat-tab').length });
 
-    // Cache panels
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
-      this.tabPanels[tab] = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
-      console.log(`${MODULE_ID}: Cached panel for ${tab}`, { exists: !!this.tabPanels[tab].length, panelHtml: this.tabPanels[tab].html() });
+      TabbedChatManager.tabPanels[tab] = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
+      console.log(`${MODULE_ID}: Cached panel for ${tab}`, { exists: !!TabbedChatManager.tabPanels[tab].length });
     });
 
-    // Bind clicks
-    $html.find('.tabchat-nav').on('click', '.tabchat-tab', (event) => this._activateTab(event.currentTarget.dataset.tab, $html));
+    $html.find('.tabchat-nav').on('click', '.tabchat-tab', (event) => {
+      const tabName = event.currentTarget.dataset.tab;
+      TabbedChatManager._activateTab(tabName, $html);
+    });
 
-    // Render existing messages
-    const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
-    for (const message of messages) {
-      await this.renderMessage(message);
-    }
-
-    this._scrollBottom();
-    return $html[0]; // Return the DOM element to ensure changes are applied
+    TabbedChatManager._scrollBottom($html);
+    TabbedChatManager._initialized = true;
   }
 
-  _forceFallbackChat($html, originalHtml) {
-    console.warn(`${MODULE_ID}: Falling back to single chat due to injection failure`);
-    const $fallbackOl = $('<ol class="chat-messages"></ol>');
-    $html.find('ol.chat-messages, .chat-messages-container ol, ol').replaceWith($fallbackOl);
-    this.tabPanels['ooc'] = $fallbackOl; // Use OOC as default fallback
-    return $html[0];
-  }
-
-  async renderMessage(message) {
+  static async renderMessage(message, $html) {
     let rendered = await message.renderHTML();
     if (!rendered) {
-      // Fallback for base messages or render failure
       rendered = document.createElement('li');
       rendered.className = 'chat-message';
       rendered.dataset.messageId = message.id;
@@ -93,22 +99,22 @@ class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
     }
     const msgHtml = $(rendered);
 
-    const tab = this._getMessageTab(message);
-    if (tab && this.tabPanels[tab]) {
+    const tab = TabbedChatManager._getMessageTab(message);
+    if (tab && TabbedChatManager.tabPanels[tab]) {
       console.log(`${MODULE_ID}: Rendering message to ${tab} tab`, { id: message.id, content: message.content });
-      this.tabPanels[tab].append(msgHtml);
-      if (this._activeTab === tab) {
-        this._scrollBottom(tab);
+      TabbedChatManager.tabPanels[tab].append(msgHtml);
+      if (TabbedChatManager._activeTab === tab) {
+        TabbedChatManager._scrollBottom($html, tab);
       }
       msgHtml.addClass('tabbed-whispers-highlight');
       setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
     } else {
-      console.warn(`${MODULE_ID}: No valid tab or panel for message, using fallback`, { tab, panels: this.tabPanels, message: { id: message.id, type: message.type } });
-      this.tabPanels['ooc']?.append(msgHtml); // Fallback to OOC if tab fails
+      console.warn(`${MODULE_ID}: No valid tab or panel, using fallback`, { tab, panels: TabbedChatManager.tabPanels });
+      TabbedChatManager.tabPanels['ooc']?.append(msgHtml);
     }
   }
 
-  _getMessageTab(message) {
+  static _getMessageTab(message) {
     if (message.isRoll) return 'rolls';
     if (message.whisper?.length > 0) return 'whisper';
     if (message.content?.startsWith('/ooc ')) return 'ooc';
@@ -133,57 +139,50 @@ class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
     return 'ooc';
   }
 
-  _activateTab(tabName, $html) {
+  static _activateTab(tabName, $html) {
     $html.find('.tabchat-tab').removeClass('active');
     $html.find(`[data-tab="${tabName}"]`).addClass('active');
     $html.find('.tabchat-panel').removeClass('active');
     $html.find(`.tabchat-panel[data-tab="${tabName}"]`).addClass('active');
-    this._activeTab = tabName;
-    this._scrollBottom();
+    TabbedChatManager._activeTab = tabName;
+    TabbedChatManager._scrollBottom($html);
   }
 
-  _scrollBottom(tabName = this._activeTab) {
-    const ol = this.tabPanels[tabName];
-    if (ol && ol.length) {
+  static _scrollBottom($html, tabName = TabbedChatManager._activeTab) {
+    const ol = $html.find(`.tabchat-panel[data-tab="${tabName}"] ol.chat-messages`);
+    if (ol?.length) {
       ol.prop('scrollTop', ol[0].scrollHeight);
     }
-  }
-
-  _onCreateDocument(document, collection, options, userId) {
-    super._onCreateDocument?.(document, collection, options, userId);
-    this.renderMessage(document);
-  }
-
-  _onUpdateDocument(document, update, options, userId) {
-    super._onUpdateDocument?.(document, update, options, userId);
-    this.renderMessage(document);
-  }
-
-  _onDeleteDocument(document, collection, options, userId) {
-    super._onDeleteDocument?.(document, collection, options, userId);
-    const $html = $(this.element);
-    ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
-      this.tabPanels[tab]?.find(`[data-message-id="${document.id}"]`).remove();
-    });
   }
 }
 
 // Module Initialization
-Hooks.once('init', () => {
-  game.settings.register(MODULE_ID, 'proximityRange', {
-    name: 'IC Proximity Range',
-    hint: 'Max distance (units) for IC messages to appear (default: 30).',
-    scope: 'world',
-    config: true,
-    default: 30,
-    type: Number
-  });
+Hooks.once('init', TabbedChatManager.init);
+
+Hooks.once('ready', TabbedChatManager.ready);
+
+// Inject tabs on chat render
+Hooks.on('renderChatLog', async (app, html, data) => {
+  await TabbedChatManager.injectTabs(app, html, data);
 });
 
-Hooks.once('ready', () => {
-  if (ui.chat instanceof TabbedChatLog) return;
-  const chatOptions = foundry.utils.deepClone(ui.chat?.options || {});
-  ui.chat.close({ force: true }).catch((err) => console.warn(`${MODULE_ID}: Error closing chat:`, err));
-  ui.chat = new TabbedChatLog(chatOptions);
-  ui.chat.render(true).catch((err) => console.error(`${MODULE_ID}: Error rendering:`, err));
+// Prevent default append and handle messages
+Hooks.on('renderChatMessageHTML', (message, html, data) => {
+  if (html) html.remove();
+  return false;
+});
+
+Hooks.on('createChatMessage', async (message, html, data) => {
+  await TabbedChatManager.renderMessage(message, $(ui.chat.element));
+});
+
+Hooks.on('updateChatMessage', async (message, update, options, userId) => {
+  await TabbedChatManager.renderMessage(message, $(ui.chat.element));
+});
+
+Hooks.on('deleteChatMessage', (message, options, userId) => {
+  const $html = $(ui.chat.element);
+  ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
+    TabbedChatManager.tabPanels[tab]?.find(`[data-message-id="${message.id}"]`).remove();
+  });
 });
