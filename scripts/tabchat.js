@@ -207,6 +207,8 @@ Hooks.on('renderChatLog', async (log, html) => {
     console.warn("TabChat: ui.chat.element or html not ready in renderChatLog");
     return;
   }
+  // Wait for UI to stabilize
+  await new Promise(resolve => setTimeout(resolve, 100));
   console.log("TabChat: renderChatLog fired");
   if (html.querySelector('.tabbed-chat-tabs') === null) {
     const tabsHtml = `
@@ -221,7 +223,10 @@ Hooks.on('renderChatLog', async (log, html) => {
       <div class="tab-panel" id="rolls-panel"></div>
       <div class="tab-panel" id="whispers-panel"></div>
     `;
-    const chatMessages = html.querySelector('.chat-messages');
+    // Try multiple selectors for v13 chat log
+    let chatMessages = html.querySelector('.message-list');
+    if (!chatMessages) chatMessages = html.querySelector('.chat-messages');
+    if (!chatMessages) chatMessages = html.querySelector('.messages');
     if (chatMessages) {
       chatMessages.insertAdjacentHTML('afterbegin', tabsHtml);
       // Move existing messages
@@ -231,7 +236,7 @@ Hooks.on('renderChatLog', async (log, html) => {
         if (message) Hooks.call('renderChatMessageHTML', message, el);
       });
     } else {
-      console.warn("TabChat: .chat-messages not found");
+      console.warn("TabChat: No valid chat message container found (.message-list, .chat-messages, .messages)");
     }
   }
   // Attach tab click handlers
