@@ -38,9 +38,9 @@
 
 .tabchat-tab.active {
   color: #fff;
-  border: 1px solid red;
+  border: 1px solid #215112; /* Changed from #ff0000 to #215112 */
   border-bottom: none;
-  box-shadow: 0 0 6px inset #ff6400;
+  box-shadow: 0 0 6px inset #215112; /* Changed from #ff6400 to #215112 */
   border-radius: 5px 5px 0 0;
 }
 
