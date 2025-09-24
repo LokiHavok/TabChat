@@ -9,8 +9,8 @@
 .tabchat-nav {
   flex: 0;
   margin: 0 0 5px;
-  border-bottom: 1px solid #ff6400;
-  box-shadow: 0 0 10px red;
+  border-bottom: 1px solid #215112; /* Changed from #ff6400 to #215112 */
+  box-shadow: 0 0 10px red; /* Keeping red shadow for contrast, can change if desired */
   display: flex;
   justify-content: center; /* Center the tabs */
   flex-direction: row; /* Ensure left-to-right order */
