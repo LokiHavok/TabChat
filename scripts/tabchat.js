@@ -98,16 +98,37 @@ class TabbedChatManager {
       await TabbedChatManager.injectTabs(app, html, data);
     });
     
+    // Register /b as a custom chat command to prevent Foundry errors
+    Hooks.once('ready', () => {
+      if (game.chatCommands) {
+        game.chatCommands.register({
+          name: '/b',
+          description: 'Send OOC message even when controlling a token',
+          callback: (chatlog, messageText, chatdata) => {
+            // Let our normal message processing handle it
+            const content = '[OOC] ' + messageText;
+            ChatMessage.create({
+              content: content,
+              type: CONST.CHAT_MESSAGE_TYPES.OOC,
+              user: game.user.id,
+              speaker: ChatMessage.getSpeaker()
+            });
+            return true; // Prevent default processing
+          }
+        });
+        console.log(`${MODULE_ID}: Registered /b chat command`);
+      }
+    });
+    
     Hooks.on('preCreateChatMessage', (doc, data, options, userId) => {
       console.log(`${MODULE_ID}: preCreateChatMessage`, { id: doc?.id, content: data?.content });
       
-      // Handle /b command to bypass Foundry's command processing
+      // Handle /b command if it wasn't caught by the chat command registration
       if (data.content && data.content.startsWith('/b ')) {
-        // Mark this message as an OOC bypass
         doc._tabchatBypass = true;
-        // Remove the /b command from the content and add [OOC] prefix
         data.content = '[OOC] ' + data.content.substring(3);
-        console.log(`${MODULE_ID}: Processed /b command, new content:`, data.content);
+        data.type = CONST.CHAT_MESSAGE_TYPES.OOC;
+        console.log(`${MODULE_ID}: Processed /b command in preCreate, new content:`, data.content);
       }
     });
     
@@ -216,24 +237,24 @@ class TabbedChatManager {
     ];
     
     const tabHtml = `
-      <div class="tabchat-container">
-        <nav class="tabchat-nav" style="display: flex; flex-direction: row;">
-          <a class="tabchat-tab active" data-tab="ic" style="order: 1;">WORLD</a>
-          <a class="tabchat-tab" data-tab="ooc" style="order: 2;">OOC</a>
-          <a class="tabchat-tab" data-tab="rolls" style="order: 3;">GAME</a>
-          <a class="tabchat-tab" data-tab="whisper" style="order: 4;">MESSAGES</a>
+      <div class="tabchat-container" style="height: 100%; display: flex; flex-direction: column;">
+        <nav class="tabchat-nav" style="display: flex; flex-direction: row; flex-shrink: 0; height: auto;">
+          <a class="tabchat-tab active" data-tab="ic" style="order: 1; padding: 8px 12px; cursor: pointer;">WORLD</a>
+          <a class="tabchat-tab" data-tab="ooc" style="order: 2; padding: 8px 12px; cursor: pointer;">OOC</a>
+          <a class="tabchat-tab" data-tab="rolls" style="order: 3; padding: 8px 12px; cursor: pointer;">GAME</a>
+          <a class="tabchat-tab" data-tab="whisper" style="order: 4; padding: 8px 12px; cursor: pointer;">MESSAGES</a>
         </nav>
-        <section class="tabchat-panel active" data-tab="ic">
-          <ol class="chat-messages"></ol>
+        <section class="tabchat-panel active" data-tab="ic" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 0; margin: 0; list-style: none;"></ol>
         </section>
-        <section class="tabchat-panel" data-tab="ooc">
-          <ol class="chat-messages"></ol>
+        <section class="tabchat-panel" data-tab="ooc" style="flex: 1; display: none; flex-direction: column; overflow: hidden;">
+          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 0; margin: 0; list-style: none;"></ol>
         </section>
-        <section class="tabchat-panel" data-tab="rolls">
-          <ol class="chat-messages"></ol>
+        <section class="tabchat-panel" data-tab="rolls" style="flex: 1; display: none; flex-direction: column; overflow: hidden;">
+          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 0; margin: 0; list-style: none;"></ol>
         </section>
-        <section class="tabchat-panel" data-tab="whisper">
-          <ol class="chat-messages"></ol>
+        <section class="tabchat-panel" data-tab="whisper" style="flex: 1; display: none; flex-direction: column; overflow: hidden;">
+          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 0; margin: 0; list-style: none;"></ol>
         </section>
       </div>
     `;
@@ -346,16 +367,10 @@ class TabbedChatManager {
       msgHtml.addClass('tabbed-whispers-highlight');
       setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
       
-      // Only scroll if this is the active tab AND there are multiple messages
-      if (TabbedChatManager._activeTab === tab) {
-        setTimeout(() => {
-          const panel = TabbedChatManager.tabPanels[tab];
-          const messageCount = panel.find('.chat-message').length;
-          if (messageCount > 1) { // Only auto-scroll if there are already messages
-            TabbedChatManager._scrollBottom($html, tab);
-          }
-        }, 50);
-      }
+      // Always scroll to bottom for new messages
+      setTimeout(() => {
+        TabbedChatManager._scrollToBottom($html, tab);
+      }, 50);
     } else {
       console.warn(`${MODULE_ID}: No valid tab panel for ${tab}`);
     }
@@ -439,26 +454,35 @@ class TabbedChatManager {
   }
 
   static _activateTab(tabName, $html) {
+    // Update tab appearances
     $html.find('.tabchat-tab').removeClass('active');
     $html.find(`[data-tab="${tabName}"]`).addClass('active');
-    $html.find('.tabchat-panel').removeClass('active');
-    $html.find(`.tabchat-panel[data-tab="${tabName}"]`).addClass('active');
+    
+    // Hide all panels and show the selected one
+    $html.find('.tabchat-panel').hide().removeClass('active');
+    $html.find(`.tabchat-panel[data-tab="${tabName}"]`).show().addClass('active');
+    
     TabbedChatManager._activeTab = tabName;
     
-    // Scroll to bottom when switching tabs, but only if there are messages
+    // Always scroll to bottom when switching tabs
     setTimeout(() => {
-      const panel = TabbedChatManager.tabPanels[tabName];
-      if (panel && panel.find('.chat-message').length > 0) {
-        TabbedChatManager._scrollBottom($html, tabName);
-      }
-    }, 50);
+      TabbedChatManager._scrollToBottom($html, tabName);
+    }, 100);
   }
 
-  static _scrollBottom($html, tabName = TabbedChatManager._activeTab) {
+  static _scrollToBottom($html, tabName = TabbedChatManager._activeTab) {
     const ol = $html.find(`.tabchat-panel[data-tab="${tabName}"] ol.chat-messages`);
     if (ol?.length) {
-      ol.prop('scrollTop', ol[0].scrollHeight);
+      // Force scroll to bottom
+      const scrollElement = ol[0];
+      scrollElement.scrollTop = scrollElement.scrollHeight;
+      console.log(`${MODULE_ID}: Scrolled ${tabName} tab to bottom (${scrollElement.scrollTop}/${scrollElement.scrollHeight})`);
     }
+  }
+
+  // Legacy method for compatibility
+  static _scrollBottom($html, tabName = TabbedChatManager._activeTab) {
+    return TabbedChatManager._scrollToBottom($html, tabName);
   }
 }
 
