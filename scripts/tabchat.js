@@ -135,7 +135,7 @@ class TabbedChatManager {
 
     let rendered;
     try {
-      rendered = await message.render();
+      rendered = await message.render(false, { editable: true });
       console.log(`${MODULE_ID}: Rendered type`, { type: typeof rendered, value: rendered });
       if (!rendered) {
         throw new Error('Render returned undefined');
@@ -157,7 +157,7 @@ class TabbedChatManager {
       // Delayed retry
       await new Promise(resolve => setTimeout(resolve, 1000));
       try {
-        rendered = await message.render();
+        rendered = await message.render(false, { editable: true });
         console.log(`${MODULE_ID}: Second render type`, { type: typeof rendered, value: rendered });
         if (!rendered) {
           console.warn(`${MODULE_ID}: Second render attempt failed for message`, { id: message.id });
@@ -305,6 +305,11 @@ Hooks.on('renderChatLog', async (app, html, data) => {
   await TabbedChatManager.injectTabs(app, html, data);
 });
 
+// Prevent Foundry's default appending
+Hooks.on('renderChatMessage', (message, html, data) => {
+  return false;
+});
+
 // Handle new messages
 Hooks.on('createChatMessage', async (message, html, data) => {
   await TabbedChatManager.renderMessage(message, $(ui.chat.element));
@@ -312,7 +317,7 @@ Hooks.on('createChatMessage', async (message, html, data) => {
 
 // Handle updates
 Hooks.on('updateChatMessage', async (message, update, options, userId) => {
-  const msgHtml = $(await message.render()); // Wrap render output
+  const msgHtml = $(await message.render(false, { editable: true })); // Wrap render output
   await TabbedChatManager.updateMessage(message, msgHtml, $(ui.chat.element));
 });
 
