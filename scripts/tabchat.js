@@ -6,10 +6,10 @@ const MODULE_ID = 'tabchat';
 class TabbedChatManager {
   static tabPanels = {};
   static _activeTab = 'ic';
-  static _initialized = false; // Prevent multiple injections
+  static _initialized = false;
 
   static init() {
-    // Register proximity setting (world scope, like in tabbed-whispers)
+    // Register proximity setting
     game.settings.register(MODULE_ID, 'proximityRange', {
       name: 'IC Proximity Range',
       hint: 'Max distance (units) for IC messages to appear (default: 30).',
@@ -29,20 +29,29 @@ class TabbedChatManager {
     }
     TabbedChatManager._initialized = true;
     console.log(`${MODULE_ID} | Ready`);
+
+    // Force re-render of chat to ensure tabs are injected
+    ui.chat.render(true).catch((err) => console.error(`${MODULE_ID}: Error re-rendering chat:`, err));
   }
 
-  static injectTabs(app, html, data) {
+  static async injectTabs(app, html, data) {
     if (!(html instanceof HTMLElement)) {
       console.warn(`${MODULE_ID}: Expected HTMLElement in renderChatLog, got`, html);
       return;
     }
 
-    // Convert to jQuery for compatibility (or use native DOM if preferred)
+    // Wait for DOM to settle (v13 async rendering workaround)
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
     const $html = $(html);
-    const defaultOl = $html.find('ol.chat-messages');
+    // Try multiple selectors to find message list
+    let defaultOl = $html.find('ol.chat-messages');
     if (!defaultOl.length) {
-      console.warn(`${MODULE_ID}: No chat-messages OL found`);
-      return;
+      defaultOl = $html.find('.chat-messages-container ol');
+      if (!defaultOl.length) {
+        console.warn(`${MODULE_ID}: No chat-messages OL found in selectors: ol.chat-messages, .chat-messages-container ol`);
+        return;
+      }
     }
 
     const tabHtml = `
@@ -65,15 +74,18 @@ class TabbedChatManager {
     // Cache tab OL elements
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
       TabbedChatManager.tabPanels[tab] = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
+      if (!TabbedChatManager.tabPanels[tab].length) {
+        console.warn(`${MODULE_ID}: Failed to cache panel for tab ${tab}`);
+      }
     });
 
     // Bind tab clicks
     $html.find('.tabchat-tab').on('click', (event) => TabbedChatManager._activateTab(event.currentTarget.dataset.tab, $html));
 
-    // Render existing messages into tabs
+    // Render existing messages
     const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
     for (const message of messages) {
-      TabbedChatManager.renderMessage(message, $html);
+      await TabbedChatManager.renderMessage(message, $html);
     }
 
     // Initial scroll
@@ -83,53 +95,47 @@ class TabbedChatManager {
   static async renderMessage(message, $html) {
     const msgHtml = await message.render();
     const tab = TabbedChatManager._getMessageTab(message);
-    if (tab && TabbedChatManager.tabPanels[tab]) {
+    if (tab && TabbedChatManager.tabPanels[tab]?.length) {
       TabbedChatManager.tabPanels[tab].append(msgHtml);
       if (TabbedChatManager._activeTab === tab) {
         TabbedChatManager._scrollBottom($html, tab);
       }
-      // Add highlight animation inspired by tabbed-whispers.css
+      // Highlight animation from tabbed-whispers
       msgHtml.addClass('tabbed-whispers-highlight');
-      setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500); // ~8 iterations * 0.3s
+      setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
+    } else {
+      console.warn(`${MODULE_ID}: No valid tab panel for message`, { tab, message });
     }
   }
 
   static _getMessageTab(message) {
-    // Rolls tab
     if (message.isRoll) return 'rolls';
-
-    // Whispers tab
     if (message.whisper?.length > 0) return 'whisper';
-
-    // Optional: Manual /ooc prefix inspired by user input needs
     if (message.content?.startsWith('/ooc ')) return 'ooc';
 
-    // IC/OOC logic
     const speaker = message.speaker;
     if (speaker?.token) {
       const sceneId = speaker.scene;
-      if (sceneId !== canvas?.scene?.id) return 'ooc'; // Not current scene -> OOC (global)
+      if (sceneId !== canvas?.scene?.id) return 'ooc';
 
       const tokenDoc = canvas?.scene?.tokens?.get(speaker.token);
       if (!tokenDoc) return 'ooc';
 
       const controlledTokens = canvas?.tokens?.controlled;
-      if (controlledTokens.length === 0 || game.user.isGM) return 'ic'; // No controlled token or GM -> full IC visibility
+      if (controlledTokens.length === 0 || game.user.isGM) return 'ic';
 
-      // Proximity check (using first controlled token)
       const controlled = controlledTokens[0];
       const distance = canvas.grid.measureDistance(tokenDoc.center, controlled.center);
       const range = game.settings.get(MODULE_ID, 'proximityRange') || 30;
       if (distance <= range) return 'ic';
     }
 
-    // Default to OOC (no token, far away, etc.)
     return 'ooc';
   }
 
   static async updateMessage(message, msgHtml, $html) {
     const tab = TabbedChatManager._getMessageTab(message);
-    if (tab && TabbedChatManager.tabPanels[tab]) {
+    if (tab && TabbedChatManager.tabPanels[tab]?.length) {
       const existing = TabbedChatManager.tabPanels[tab].find(`[data-message-id="${message.id}"]`);
       if (existing.length) {
         existing.replaceWith(msgHtml);
@@ -169,13 +175,12 @@ Hooks.once('init', TabbedChatManager.init);
 Hooks.once('ready', TabbedChatManager.ready);
 
 // Inject tabs on chat render
-Hooks.on('renderChatLog', (app, html, data) => {
-  TabbedChatManager.injectTabs(app, html, data);
+Hooks.on('renderChatLog', async (app, html, data) => {
+  await TabbedChatManager.injectTabs(app, html, data);
 });
 
 // Handle new messages
 Hooks.on('renderChatMessageHTML', async (message, html, data) => {
-  // Prevent default append; we handle it
   html.remove();
   await TabbedChatManager.renderMessage(message, $(ui.chat.element));
 });
