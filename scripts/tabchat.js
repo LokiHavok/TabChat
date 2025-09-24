@@ -198,15 +198,17 @@ class TabbedChatManager {
 
     const tab = TabbedChatManager._getMessageTab(message);
     if (tab) {
-      // Pre-initialize tabs if not found
+      // Ensure tabs are ready with delay if needed
       if (!TabbedChatManager.tabPanels[tab]?.length) {
         console.warn(`${MODULE_ID}: Tab panel for ${tab} not found, reinitializing`);
         TabbedChatManager._replaceMessageList($html.find('ol.chat-messages'), $html);
+        await new Promise(resolve => setTimeout(resolve, 500)); // Small delay to ensure DOM update
       }
       // Direct DOM append as fallback
       const $panel = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
       if ($panel.length) {
         try {
+          console.log(`${MODULE_ID}: Attempting to append to panel`, { tab, panelExists: $panel.length });
           $panel.append(msgHtml);
           if (TabbedChatManager._initialized && TabbedChatManager._activeTab === tab) {
             TabbedChatManager._scrollBottom($html, tab);
@@ -222,11 +224,11 @@ class TabbedChatManager {
             panel: $panel,
             message: { id: message.id, content: message.content }
           });
-          // Force append to DOM
+          // Force append to DOM with retry
           $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`).append(msgHtml);
         }
       } else {
-        console.warn(`${MODULE_ID}: No valid tab panel found in DOM`, { tab, message: { id: message.id, content: message.content } });
+        console.warn(`${MODULE_ID}: No valid tab panel found in DOM after reinitialization`, { tab, message: { id: message.id, content: message.content } });
       }
     } else {
       console.warn(`${MODULE_ID}: No valid tab for message`, { message: { id: message.id, content: message.content, type: message.type } });
@@ -309,10 +311,18 @@ Hooks.on('renderChatLog', async (app, html, data) => {
   await TabbedChatManager.injectTabs(app, html, data);
 });
 
-// Prevent Foundry's default appending with updated hook
+// Prevent Foundry's default appending with pre-hook
+Hooks.on('preCreateChatMessage', (message, data, options, userId) => {
+  console.log(`${MODULE_ID}: Pre-creating message, marking for custom handling`, { id: message.id, content: message.content });
+  message._customHandled = true; // Flag to ensure custom handling
+});
+
 Hooks.on('renderChatMessageHTML', (message, html, data) => {
-  // Prevent default appending by returning false
-  return false;
+  console.log(`${MODULE_ID}: Intercepting renderChatMessageHTML`, { id: message.id, htmlExists: !!html });
+  if (message._customHandled) {
+    return false; // Prevent default appending for custom-handled messages
+  }
+  return true; // Allow default for non-custom messages if any
 });
 
 // Handle new messages
