@@ -117,9 +117,14 @@ class TabbedChatManager {
   }
 
   static async renderMessage(message, $html) {
+    if (!message || typeof message !== 'object') {
+      console.error(`${MODULE_ID}: Invalid message object`, { message });
+      return;
+    }
+
     const msgHtml = await message.render();
     if (!msgHtml || typeof msgHtml !== 'object' || !('addClass' in msgHtml)) {
-      console.error(`${MODULE_ID}: Invalid msgHtml from render()`, { msgHtml, message });
+      console.error(`${MODULE_ID}: Invalid msgHtml from render()`, { msgHtml, message: { id: message.id, content: message.content, type: message.type } });
       return;
     }
 
@@ -133,7 +138,7 @@ class TabbedChatManager {
       msgHtml.addClass('tabbed-whispers-highlight');
       setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
     } else {
-      console.warn(`${MODULE_ID}: No valid tab panel for message`, { tab, message, panels: TabbedChatManager.tabPanels });
+      console.warn(`${MODULE_ID}: No valid tab panel for message`, { tab, message: { id: message.id, content: message.content, type: message.type }, panels: TabbedChatManager.tabPanels });
     }
   }
 
@@ -164,7 +169,7 @@ class TabbedChatManager {
 
   static async updateMessage(message, msgHtml, $html) {
     if (!msgHtml || typeof msgHtml !== 'object' || !('addClass' in msgHtml)) {
-      console.error(`${MODULE_ID}: Invalid msgHtml in updateMessage()`, { msgHtml, message });
+      console.error(`${MODULE_ID}: Invalid msgHtml in updateMessage()`, { msgHtml, message: { id: message.id, content: message.content, type: message.type } });
       return;
     }
 
