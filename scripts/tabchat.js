@@ -1,7 +1,7 @@
 // Tabbed Chat Module for Foundry VTT v13
 // Inspired by fvtt-tabbed-whispers and proximity-text-chat
 
-class TabbedChatLog extends ChatLog {
+class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
   constructor(options = {}) {
     super(options);
     this._activeTab = 'ic';
@@ -12,10 +12,15 @@ class TabbedChatLog extends ChatLog {
    * Override to inject tab structure after base render.
    */
   async _renderInner(data) {
-    await super._renderInner(data);
+    const html = await super._renderInner(data);
 
     // Replace the default <ol class="chat-messages"> with tabbed structure
-    const defaultOl = this.element.find('ol.chat-messages');
+    const defaultOl = html.find('ol.chat-messages');
+    if (!defaultOl.length) {
+      console.warn('TabbedChatLog: No chat-messages OL found in rendered HTML');
+      return html; // Fallback to prevent breaking
+    }
+
     const tabHtml = `
       <div class="tabchat-container">
         <nav class="tabchat-nav">
@@ -33,13 +38,14 @@ class TabbedChatLog extends ChatLog {
     `;
     defaultOl.replaceWith(tabHtml);
 
-    // Cache tab OL elements
+    // Cache tab OL elements after render
+    this.element = html; // Ensure this.element is set for tab binding
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
-      this.tabPanels[tab] = this.element.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
+      this.tabPanels[tab] = html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
     });
 
     // Bind tab clicks
-    this.element.find('.tabchat-tab').on('click', (event) => this._activateTab(event.currentTarget.dataset.tab));
+    html.find('.tabchat-tab').on('click', (event) => this._activateTab(event.currentTarget.dataset.tab));
 
     // Render existing messages into tabs
     const messages = this.collection.sort((a, b) => a.id.localeCompare(b.id));
@@ -49,6 +55,7 @@ class TabbedChatLog extends ChatLog {
 
     // Initial scroll
     this._scrollBottom();
+    return html;
   }
 
   /**
@@ -73,7 +80,7 @@ class TabbedChatLog extends ChatLog {
     if (message.isRoll) return 'rolls';
 
     // Whispers tab
-    if (message.whisper && message.whisper.length > 0) return 'whisper';
+    if (message.whisper?.length > 0) return 'whisper';
 
     // IC/OOC logic
     const speaker = message.speaker;
@@ -128,9 +135,9 @@ class TabbedChatLog extends ChatLog {
    */
   _activateTab(tabName) {
     this.element.find('.tabchat-tab').removeClass('active');
-    $(`[data-tab="${tabName}"]`, this.element).addClass('active');
+    this.element.find(`[data-tab="${tabName}"]`).addClass('active');
     this.element.find('.tabchat-panel').removeClass('active');
-    $(`.tabchat-panel[data-tab="${tabName}"]`, this.element).addClass('active');
+    this.element.find(`.tabchat-panel[data-tab="${tabName}"]`).addClass('active');
     this._activeTab = tabName;
     this._scrollBottom();
   }
@@ -140,7 +147,7 @@ class TabbedChatLog extends ChatLog {
    */
   _scrollBottom(tabName = this._activeTab) {
     const ol = this.tabPanels[tabName];
-    if (ol && ol.length) {
+    if (ol?.length) {
       ol.prop('scrollTop', ol[0].scrollHeight);
     }
   }
@@ -185,9 +192,13 @@ Hooks.once('init', () => {
 
 Hooks.once('ready', () => {
   // Replace core ChatLog with tabbed version
-  if (ui.chat instanceof TabbedChatLog) return; // Prevent multiple replacements
+  if (ui.chat instanceof TabbedChatLog) {
+    console.log('TabbedChatLog: Already initialized, skipping.');
+    return;
+  }
+  console.log('TabbedChatLog: Initializing chat replacement...');
   const chatOptions = foundry.utils.deepClone(ui.chat?.options || {});
-  ui.chat.close({ force: true }).catch((err) => console.warn("Error closing chat:", err));
+  ui.chat.close({ force: true }).catch((err) => console.warn('TabbedChatLog: Error closing core chat:', err));
   ui.chat = new TabbedChatLog(chatOptions);
-  ui.chat.render(true).catch((err) => console.error("Error rendering TabbedChatLog:", err));
+  ui.chat.render(true).catch((err) => console.error('TabbedChatLog: Error rendering:', err));
 });
