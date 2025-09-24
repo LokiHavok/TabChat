@@ -30,12 +30,14 @@ class TabbedChatManager {
     TabbedChatManager._initialized = true;
     console.log(`${MODULE_ID} | Ready`);
 
-    // Render existing messages after initialization
-    const $html = $(ui.chat.element);
-    const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
-    for (const message of messages) {
-      TabbedChatManager.renderMessage(message, $html);
-    }
+    // Delay rendering to ensure UI is fully loaded
+    setTimeout(() => {
+      const $html = $(ui.chat.element);
+      const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
+      for (const message of messages) {
+        TabbedChatManager.renderMessage(message, $html);
+      }
+    }, 1000); // 1-second delay
   }
 
   static async injectTabs(app, html, data) {
@@ -129,8 +131,21 @@ class TabbedChatManager {
     let msgHtml;
     try {
       msgHtml = await message.render();
+      if (!msgHtml) {
+        throw new Error('Render returned undefined');
+      }
     } catch (e) {
-      console.error(`${MODULE_ID}: Error rendering message`, { error: e.message, message: { id: message.id, content: message.content, type: message.type, speaker: message.speaker, whisper: message.whisper } });
+      console.error(`${MODULE_ID}: Error rendering message`, {
+        error: e.message,
+        stack: e.stack,
+        message: {
+          id: message.id,
+          content: message.content,
+          type: message.type,
+          speaker: message.speaker,
+          whisper: message.whisper
+        }
+      });
       return;
     }
 
