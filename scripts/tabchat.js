@@ -134,44 +134,48 @@ class TabbedChatManager {
     }
 
     let rendered;
-    try {
-      rendered = await message.render(); // Try default render first
-      console.log(`${MODULE_ID}: Rendered type (default)`, { type: typeof rendered, value: rendered });
-      if (!rendered) {
-        throw new Error('Render returned undefined');
-      }
-    } catch (e) {
-      console.error(`${MODULE_ID}: Error rendering message (default)`, {
-        error: e.message,
-        stack: e.stack,
-        message: {
-          id: message.id,
-          content: message.content,
-          type: message.type,
-          speaker: message.speaker,
-          whisper: message.whisper,
-          isRoll: message.isRoll,
-          data: message.data || 'Data unavailable'
-        }
-      });
-      // Delayed retry with alternative
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    if (message.type === 'base') {
+      // Custom HTML for base messages
+      rendered = `<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`;
+      console.log(`${MODULE_ID}: Custom rendered for base message`, { type: typeof rendered, value: rendered });
+    } else {
       try {
-        rendered = await message.render(true); // Try with chat bubble render
-        console.log(`${MODULE_ID}: Rendered type (chat bubble)`, { type: typeof rendered, value: rendered });
+        rendered = await message.render();
+        console.log(`${MODULE_ID}: Rendered type (default)`, { type: typeof rendered, value: rendered });
         if (!rendered) {
-          console.warn(`${MODULE_ID}: Second render attempt failed for message`, { id: message.id });
-          // Force fallback HTML
+          throw new Error('Render returned undefined');
+        }
+      } catch (e) {
+        console.error(`${MODULE_ID}: Error rendering message (default)`, {
+          error: e.message,
+          stack: e.stack,
+          message: {
+            id: message.id,
+            content: message.content,
+            type: message.type,
+            speaker: message.speaker,
+            whisper: message.whisper,
+            isRoll: message.isRoll,
+            data: message.data || 'Data unavailable'
+          }
+        });
+        // Delayed retry with chat bubble render
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        try {
+          rendered = await message.render(true);
+          console.log(`${MODULE_ID}: Rendered type (chat bubble)`, { type: typeof rendered, value: rendered });
+          if (!rendered) {
+            console.warn(`${MODULE_ID}: Second render attempt failed for message`, { id: message.id });
+            rendered = `<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`;
+          }
+        } catch (e2) {
+          console.error(`${MODULE_ID}: Second render attempt failed`, {
+            error: e2.message,
+            stack: e2.stack,
+            message: { id: message.id }
+          });
           rendered = `<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`;
         }
-      } catch (e2) {
-        console.error(`${MODULE_ID}: Second render attempt failed`, {
-          error: e2.message,
-          stack: e2.stack,
-          message: { id: message.id }
-        });
-        // Force fallback HTML
-        rendered = `<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`;
       }
     }
 
