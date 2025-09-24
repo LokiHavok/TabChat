@@ -40,6 +40,18 @@ class TabbedChatManager {
         TabbedChatManager.renderMessage(message, $html);
       }
     }, 5000); // 5-second delay
+
+    // Override _postOne to suppress default append
+    if (!ChatLog.prototype._originalPostOne) {
+      ChatLog.prototype._originalPostOne = ChatLog.prototype._postOne;
+      ChatLog.prototype._postOne = async function (...args) {
+        console.log(`${MODULE_ID}: Overriding _postOne, suppressing default append`, { args });
+        if (TabbedChatManager._initialized) {
+          return; // Suppress append if module is handling messages
+        }
+        return this._originalPostOne.call(this, ...args); // Fallback to original if not initialized
+      };
+    }
   }
 
   static async injectTabs(app, html, data) {
@@ -65,7 +77,7 @@ class TabbedChatManager {
       if (!defaultOl.length) {
         console.error(`${MODULE_ID}: Failed to find OL after waiting, attempting reinitialization`, { html: $html.html() });
         TabbedChatManager._initialized = false; // Allow reinitialization
-        return; // Retry on next render
+        return;
       }
     }
 
@@ -263,7 +275,7 @@ class TabbedChatManager {
   static _activateTab(tabName, $html) {
     $html.find('.tabchat-tab').removeClass('active');
     $html.find(`[data-tab="${tabName}"]`).addClass('active');
-    $html.find('.chat-panel').removeClass('active');
+    $html.find('.tabchat-panel').removeClass('active');
     $html.find(`.tabchat-panel[data-tab="${tabName}"]`).addClass('active');
     TabbedChatManager._activeTab = tabName;
     TabbedChatManager._scrollBottom($html);
