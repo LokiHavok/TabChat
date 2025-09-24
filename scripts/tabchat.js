@@ -198,11 +198,11 @@ class TabbedChatManager {
       'visibility': 'hidden'
     });
     
-    // CORRECT tab order: WORLD, OOC, ROLLS, WHISPER
+    // CORRECT tab order: WORLD, OOC, GAME, WHISPER
     const tabs = [
       { id: 'ic', label: 'WORLD' },
       { id: 'ooc', label: 'OOC' },
-      { id: 'rolls', label: 'ROLLS' },
+      { id: 'rolls', label: 'GAME' },
       { id: 'whisper', label: 'WHISPER' }
     ];
     
@@ -225,7 +225,7 @@ class TabbedChatManager {
     
     // Insert tabbed interface AFTER the original ol
     defaultOl.after(tabHtml);
-    console.log(`${MODULE_ID}: CORE - Added tabbed interface with correct order: WORLD | OOC | ROLLS | WHISPER`);
+    console.log(`${MODULE_ID}: CORE - Added tabbed interface with correct order: WORLD | OOC | GAME | WHISPER`);
 
     // Cache tab panels
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
@@ -298,6 +298,33 @@ class TabbedChatManager {
         });
       }
       
+      // For WORLD tab, replace token name with actor name
+      if (tab === 'ic' && message.speaker?.token && message.speaker?.actor) {
+        const tokenDoc = canvas?.scene?.tokens?.get(message.speaker.token);
+        if (tokenDoc && tokenDoc.actor) {
+          const actorName = tokenDoc.actor.name;
+          const tokenName = tokenDoc.name;
+          
+          // Replace token name with actor name in the message display
+          msgHtml.find('.message-sender, .sender-name, .speaker-name').each(function() {
+            const $this = $(this);
+            if ($this.text().includes(tokenName)) {
+              $this.html($this.html().replace(tokenName, actorName));
+            }
+          });
+          
+          // Also check in the main content area for speaker identification
+          msgHtml.find('.message-content, .flavor-text').each(function() {
+            const $this = $(this);
+            if ($this.html().includes(tokenName)) {
+              $this.html($this.html().replace(new RegExp(tokenName, 'g'), actorName));
+            }
+          });
+          
+          console.log(`${MODULE_ID}: Replaced token name "${tokenName}" with actor name "${actorName}" in WORLD tab`);
+        }
+      }
+      
       TabbedChatManager.tabPanels[tab].append(msgHtml);
       
       // Add highlight effect
@@ -326,17 +353,23 @@ class TabbedChatManager {
     // Handle whispers
     if (message.whisper?.length > 0) return 'whisper';
     
-    // Check for /b bypass command
-    if (message.content?.startsWith('/b ')) return 'ooc';
+    // Check for /b bypass command (with debugging)
+    const content = message.content || '';
+    if (content.startsWith('/b ')) {
+      console.log(`${MODULE_ID}: /b command detected, routing to OOC`, { content: content.substring(0, 20) });
+      return 'ooc';
+    }
     
     // Check if message has a token speaker
     const speaker = message.speaker;
     if (speaker?.token) {
       // Token is speaking = WORLD (IC)
+      console.log(`${MODULE_ID}: Token speaker detected, routing to WORLD`, { token: speaker.token });
       return 'ic';
     }
     
     // No token = OOC (includes GM narration without token)
+    console.log(`${MODULE_ID}: No token speaker, routing to OOC`);
     return 'ooc';
   }
 
