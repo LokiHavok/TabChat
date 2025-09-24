@@ -224,7 +224,7 @@ class TabbedChatManager {
             panel: $panel,
             message: { id: message.id, content: message.content }
           });
-          // Force append to DOM with retry
+          // Force append to DOM
           $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`).append(msgHtml);
         }
       } else {
@@ -320,6 +320,10 @@ Hooks.on('preCreateChatMessage', (message, data, options, userId) => {
 Hooks.on('renderChatMessageHTML', (message, html, data) => {
   console.log(`${MODULE_ID}: Intercepting renderChatMessageHTML`, { id: message.id, htmlExists: !!html });
   if (message._customHandled) {
+    // Remove the html element to prevent default append
+    if (html) {
+      html.remove();
+    }
     return false; // Prevent default appending for custom-handled messages
   }
   return true; // Allow default for non-custom messages if any
