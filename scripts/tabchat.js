@@ -245,17 +245,25 @@ class TabbedChatManager {
       'visibility': 'hidden'
     });
     
+    // Fixed tab order: IC -> OOC -> ROLLS -> WHISPER, with IC renamed to WORLD
+    const tabs = [
+      { id: 'ic', label: 'WORLD' },
+      { id: 'ooc', label: 'OOC' },
+      { id: 'rolls', label: 'ROLLS' },
+      { id: 'whisper', label: 'WHISPER' }
+    ];
+    
     const tabHtml = `
       <div class="tabchat-container">
         <nav class="tabchat-nav">
-          ${['ic', 'ooc', 'rolls', 'whisper'].map((tab) => `
-            <a class="tabchat-tab ${tab === 'ic' ? 'active' : ''}" data-tab="${tab}">
-              ${tab.toUpperCase()}
+          ${tabs.map((tab) => `
+            <a class="tabchat-tab ${tab.id === 'ic' ? 'active' : ''}" data-tab="${tab.id}">
+              ${tab.label}
             </a>
           `).join('')}
         </nav>
-        ${['ic', 'ooc', 'rolls', 'whisper'].map((tab) => `
-          <section class="tabchat-panel ${tab === 'ic' ? 'active' : ''}" data-tab="${tab}">
+        ${tabs.map((tab) => `
+          <section class="tabchat-panel ${tab.id === 'ic' ? 'active' : ''}" data-tab="${tab.id}">
             <ol class="chat-messages"></ol>
           </section>
         `).join('')}
@@ -264,7 +272,7 @@ class TabbedChatManager {
     
     // Insert tabbed interface AFTER the original ol instead of replacing it
     defaultOl.after(tabHtml);
-    console.log(`${MODULE_ID}: FIXED - Added tabbed interface, kept original ol hidden`);
+    console.log(`${MODULE_ID}: FIXED - Added tabbed interface with correct tab order`);
 
     // Cache tab panels
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
@@ -303,10 +311,94 @@ class TabbedChatManager {
 
     const msgHtml = $(rendered);
     const tab = TabbedChatManager._getMessageTab(message);
+    const currentScene = canvas?.scene?.id;
+    const messageScene = message.speaker?.scene || message._messageScene;
+    const currentUserId = game.user.id;
+    
+    // Scene-based and permission filtering logic
+    let shouldRender = true;
+    
+    if (tab === 'ic') {
+      // IC (WORLD) messages only show in their originating scene
+      shouldRender = (messageScene === currentScene);
+      console.log(`${MODULE_ID}: IC message scene check`, { 
+        messageScene, 
+        currentScene, 
+        shouldRender 
+      });
+    } else if (tab === 'ooc') {
+      if (message._isGlobalOOC) {
+        // Global OOC messages (/g, /gooc) show everywhere
+        shouldRender = true;
+        console.log(`${MODULE_ID}: Global OOC message - rendering in all scenes`);
+      } else {
+        // Local OOC messages only show in their originating scene
+        shouldRender = (messageScene === currentScene);
+        console.log(`${MODULE_ID}: Local OOC message scene check`, { 
+          messageScene, 
+          currentScene, 
+          shouldRender 
+        });
+      }
+    } else if (tab === 'rolls') {
+      // ROLLS are now scene-specific (confined to scene like WORLD/IC)
+      shouldRender = (messageScene === currentScene);
+      console.log(`${MODULE_ID}: Rolls message scene check`, { 
+        messageScene, 
+        currentScene, 
+        shouldRender 
+      });
+    } else if (tab === 'whisper') {
+      // WHISPER filtering: players see only their whispers, GMs see ALL whispers
+      if (game.user.isGM) {
+        shouldRender = true; // GMs see all whispers
+        console.log(`${MODULE_ID}: GM sees all whispers`);
+      } else {
+        // Players only see whispers they're involved in
+        const whisperTargets = message.whisper || [];
+        const isWhisperAuthor = message.user === currentUserId;
+        const isWhisperTarget = whisperTargets.includes(currentUserId);
+        shouldRender = isWhisperAuthor || isWhisperTarget;
+        console.log(`${MODULE_ID}: Whisper visibility check`, { 
+          isAuthor: isWhisperAuthor, 
+          isTarget: isWhisperTarget, 
+          shouldRender,
+          whisperTargets 
+        });
+      }
+    }
+    
+    if (!shouldRender) {
+      console.log(`${MODULE_ID}: Skipping message rendering`, { 
+        tab, 
+        reason: tab === 'whisper' ? 'not involved in whisper' : 'wrong scene',
+        messageScene, 
+        currentScene 
+      });
+      return;
+    }
     
     console.log(`${MODULE_ID}: FIXED - Rendering message to ${tab} tab`);
     
     if (tab && TabbedChatManager.tabPanels[tab]?.length) {
+      // Process chat commands by removing the command prefix
+      if (message.content?.startsWith('/g ')) {
+        msgHtml.find('.message-content').each(function() {
+          const content = $(this).html();
+          $(this).html(content.replace('/g ', '[GLOBAL] '));
+        });
+      } else if (message.content?.startsWith('/gooc ')) {
+        msgHtml.find('.message-content').each(function() {
+          const content = $(this).html();
+          $(this).html(content.replace('/gooc ', '[GLOBAL] '));
+        });
+      } else if (message.content?.startsWith('/b ')) {
+        msgHtml.find('.message-content').each(function() {
+          const content = $(this).html();
+          $(this).html(content.replace('/b ', '[OOC] '));
+        });
+      }
+      
       TabbedChatManager.tabPanels[tab].append(msgHtml);
       if (TabbedChatManager._activeTab === tab) {
         TabbedChatManager._scrollBottom($html, tab);
@@ -322,27 +414,103 @@ class TabbedChatManager {
   }
 
   static _getMessageTab(message) {
-    if (message.isRoll) return 'rolls';
+    // Handle rolls (dice, combat notifications, etc.)
+    if (message.isRoll || message.type === 'roll') return 'rolls';
+    
+    // Handle combat notifications (round announcements, etc.)
+    if (message.type === 'other' && (
+        message.content?.includes('Round') || 
+        message.content?.includes('Combat') ||
+        message.content?.includes('Initiative')
+    )) {
+      return 'rolls';
+    }
+    
+    // Handle whispers
     if (message.whisper?.length > 0) return 'whisper';
-    if (message.content?.startsWith('/ooc ')) return 'ooc';
+    
+    // Check for chat commands
+    const content = message.content || '';
+    
+    // Narrator Tools module commands
+    if (content.startsWith('/desc ') || content.startsWith('/describe ') || content.startsWith('/description ')) {
+      message._isIC = true;
+      message._messageScene = message.speaker?.scene || canvas?.scene?.id;
+      return 'ic';
+    }
+    
+    if (content.startsWith('/narrate ') || content.startsWith('/narration ')) {
+      message._isIC = true;
+      message._messageScene = message.speaker?.scene || canvas?.scene?.id;
+      return 'ic';
+    }
+    
+    if (content.startsWith('/note ') || content.startsWith('/notify ') || content.startsWith('/notification ')) {
+      message._isLocalOOC = true;
+      return 'ooc';
+    }
+    
+    if (content.startsWith('/as ')) {
+      message._isIC = true;
+      message._messageScene = message.speaker?.scene || canvas?.scene?.id;
+      return 'ic';
+    }
+    
+    // Global OOC commands - these show in ALL scenes' OOC tabs
+    if (content.startsWith('/g ') || content.startsWith('/gooc ')) {
+      message._isGlobalOOC = true;
+      return 'ooc';
+    }
+    
+    // Bypass command - forces OOC even when controlling token
+    if (content.startsWith('/b ') || content.startsWith('/ooc ')) {
+      message._isLocalOOC = true;
+      return 'ooc';
+    }
+    
+    // Regular OOC command
+    if (content.startsWith('/ooc ')) {
+      message._isLocalOOC = true;
+      return 'ooc';
+    }
 
     const speaker = message.speaker;
     if (speaker?.token) {
-      const sceneId = speaker.scene;
-      if (sceneId !== canvas?.scene?.id) return 'ooc';
+      const messageScene = speaker.scene;
+      const currentScene = canvas?.scene?.id;
+      
+      // If message is from a different scene than current, it goes to OOC
+      // (unless it's a global message which we handle separately)
+      if (messageScene !== currentScene) {
+        message._isFromDifferentScene = true;
+        return 'ooc';
+      }
 
       const tokenDoc = canvas?.scene?.tokens?.get(speaker.token);
       if (!tokenDoc) return 'ooc';
 
       const controlledTokens = canvas?.tokens?.controlled;
-      if (controlledTokens.length === 0 || game.user.isGM) return 'ic';
+      if (controlledTokens.length === 0 || game.user.isGM) {
+        // No controlled tokens or GM - goes to IC (WORLD) tab
+        message._isIC = true;
+        message._messageScene = messageScene;
+        return 'ic';
+      }
 
       const controlled = controlledTokens[0];
       const distance = canvas.grid.measureDistance(tokenDoc.center, controlled.center);
       const range = game.settings.get(MODULE_ID, 'proximityRange') || 30;
-      if (distance <= range) return 'ic';
+      
+      if (distance <= range) {
+        // Within proximity range - goes to IC (WORLD) tab
+        message._isIC = true;
+        message._messageScene = messageScene;
+        return 'ic';
+      }
     }
 
+    // Default to OOC for everything else
+    message._isLocalOOC = true;
     return 'ooc';
   }
 
