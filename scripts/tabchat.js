@@ -40,20 +40,39 @@ class TabbedChatManager {
       return;
     }
 
-    // Wait for DOM to settle (v13 async rendering workaround)
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
     const $html = $(html);
-    // Try multiple selectors to find message list
+
+    // Log DOM structure for debugging
+    console.log(`${MODULE_ID}: ChatLog DOM structure`, html.outerHTML);
+
+    // Try multiple selectors
     let defaultOl = $html.find('ol.chat-messages');
     if (!defaultOl.length) {
       defaultOl = $html.find('.chat-messages-container ol');
-      if (!defaultOl.length) {
-        console.warn(`${MODULE_ID}: No chat-messages OL found in selectors: ol.chat-messages, .chat-messages-container ol`);
-        return;
-      }
+    }
+    if (!defaultOl.length) {
+      defaultOl = $html.find('ol'); // Broad fallback
+    }
+    if (!defaultOl.length) {
+      console.warn(`${MODULE_ID}: No <ol> found in ChatLog DOM. Attempting MutationObserver...`);
+
+      // Use MutationObserver to wait for the message list
+      const observer = new MutationObserver((mutations, obs) => {
+        const ol = html.querySelector('ol.chat-messages') || html.querySelector('.chat-messages-container ol') || html.querySelector('ol');
+        if (ol) {
+          TabbedChatManager._replaceMessageList($(ol), $html);
+          obs.disconnect();
+        }
+      });
+      observer.observe(html, { childList: true, subtree: true });
+      setTimeout(() => observer.disconnect(), 1000); // Stop after 1s if no match
+      return;
     }
 
+    TabbedChatManager._replaceMessageList(defaultOl, $html);
+  }
+
+  static _replaceMessageList(defaultOl, $html) {
     const tabHtml = `
       <div class="tabchat-container">
         <nav class="tabchat-nav">
@@ -85,7 +104,7 @@ class TabbedChatManager {
     // Render existing messages
     const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
     for (const message of messages) {
-      await TabbedChatManager.renderMessage(message, $html);
+      TabbedChatManager.renderMessage(message, $html);
     }
 
     // Initial scroll
