@@ -201,17 +201,13 @@ function switchToTab(tabId) {
   log.scrollBottom();
 }
 
-// UI Injection with higher priority
+// UI Injection
 Hooks.on('renderChatLog', async (log, html) => {
   if (!ui.chat?.element || !html) {
     console.warn("TabChat: ui.chat.element or html not ready in renderChatLog");
     return;
   }
-  // Wait for UI to stabilize
-  await new Promise(resolve => setTimeout(resolve, 200));
   console.log("TabChat: renderChatLog fired");
-  // Log chat log structure for debugging
-  console.log("TabChat: Chat log HTML structure", html.outerHTML);
   if (html.querySelector('.tabbed-chat-tabs') === null) {
     const tabsHtml = `
       <nav class="tabbed-chat-tabs">
@@ -225,14 +221,8 @@ Hooks.on('renderChatLog', async (log, html) => {
       <div class="tab-panel" id="rolls-panel"></div>
       <div class="tab-panel" id="whispers-panel"></div>
     `;
-    // Try multiple selectors for v13 chat log
-    let chatMessages = html.querySelector('.message-list');
-    if (!chatMessages) chatMessages = html.querySelector('.chat-messages');
-    if (!chatMessages) chatMessages = html.querySelector('.messages');
-    if (!chatMessages) chatMessages = html.querySelector('.chat-log');
-    if (!chatMessages) chatMessages = html.querySelector('div[class*="message"]')?.parentElement;
+    const chatMessages = html.querySelector('.chat-messages');
     if (chatMessages) {
-      console.log("TabChat: Found chat message container", chatMessages.className);
       chatMessages.insertAdjacentHTML('afterbegin', tabsHtml);
       // Move existing messages
       html.querySelectorAll('.message').forEach(el => {
@@ -241,7 +231,7 @@ Hooks.on('renderChatLog', async (log, html) => {
         if (message) Hooks.call('renderChatMessageHTML', message, el);
       });
     } else {
-      console.warn("TabChat: No valid chat message container found (.message-list, .chat-messages, .messages, .chat-log, or message parent)");
+      console.warn("TabChat: .chat-messages not found");
     }
   }
   // Attach tab click handlers
@@ -251,4 +241,4 @@ Hooks.on('renderChatLog', async (log, html) => {
       switchToTab(tabId);
     });
   });
-}, { priority: 100 });
+});
