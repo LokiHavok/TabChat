@@ -18,7 +18,7 @@
       "flags": {}
     }
   ],
-  "url": "https://github.com/yourusername/tabchat",
-  "manifest": "https://raw.githubusercontent.com/yourusername/tabchat/main/module.json",
-  "download": "https://github.com/yourusername/tabchat/archive/main.zip"
+  "url": "https://github.com/lokihavok/tabchat",
+  "manifest": "https://raw.githubusercontent.com/lokihavok/tabchat/main/module.json",
+  "download": "https://github.com/lokihavok/tabchat/archive/main.zip"
 }
