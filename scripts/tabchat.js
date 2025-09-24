@@ -109,22 +109,42 @@ class TabbedChatManager {
       await TabbedChatManager.injectTabs(app, html, data);
     });
     
+    // Track messages we're handling to prevent Foundry's default behavior
+    const customHandledMessages = new Set();
+    
     // Mark pre-creation so we can suppress Foundry UI append in render hook
     Hooks.on('preCreateChatMessage', (doc, data, options, userId) => {
-      // Attach flag to the document being created; Foundry will pass that same doc to create hooks.
       try {
-        if (doc) doc._customHandled = true;
-        console.log(`${MODULE_ID}: preCreateChatMessage flagged for custom handling`, { id: doc?.id, content: data?.content });
+        // Since doc.id might be null at this point, we'll use the content as a temporary identifier
+        const tempId = `${data.content}_${Date.now()}_${Math.random()}`;
+        customHandledMessages.add(tempId);
+        if (doc) doc._tempId = tempId;
+        console.log(`${MODULE_ID}: preCreateChatMessage flagged for custom handling`, { id: doc?.id, tempId, content: data?.content });
       } catch (err) {
         console.warn(`${MODULE_ID}: preCreateChatMessage handler error`, err);
+      }
+    });
+    
+    // Add the actual message ID once it's created
+    Hooks.on('createChatMessage', (message) => {
+      try {
+        if (message._tempId && customHandledMessages.has(message._tempId)) {
+          customHandledMessages.delete(message._tempId);
+          customHandledMessages.add(message.id);
+          message._customHandled = true;
+        }
+      } catch (err) {
+        console.warn(`${MODULE_ID}: createChatMessage handler error`, err);
       }
     });
     
     // Intercept Foundry's render hook (v13 uses HTMLElement)
     Hooks.on('renderChatMessageHTML', (message, html, data) => {
       try {
-        console.log(`${MODULE_ID}: Intercepting renderChatMessageHTML`, { id: message.id, htmlExists: !!html, custom: !!message._customHandled });
-        if (message._customHandled) {
+        const isCustom = customHandledMessages.has(message.id) || message._customHandled;
+        console.log(`${MODULE_ID}: Intercepting renderChatMessageHTML`, { id: message.id, htmlExists: !!html, custom: isCustom });
+        
+        if (isCustom) {
           // html may be an HTMLElement or jQuery object
           if (html) {
             if (html instanceof HTMLElement && typeof html.remove === 'function') html.remove();
@@ -143,6 +163,18 @@ class TabbedChatManager {
     
     // Create/Update/Delete handlers
     Hooks.on('createChatMessage', async (message, html, data) => {
+      // Handle the custom tracking first
+      try {
+        if (message._tempId && customHandledMessages.has(message._tempId)) {
+          customHandledMessages.delete(message._tempId);
+          customHandledMessages.add(message.id);
+          message._customHandled = true;
+        }
+      } catch (err) {
+        console.warn(`${MODULE_ID}: createChatMessage handler error`, err);
+      }
+      
+      // Then render the message
       await TabbedChatManager.renderMessage(message, $(ui.chat.element));
     });
     
