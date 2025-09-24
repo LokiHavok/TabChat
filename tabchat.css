@@ -1,0 +1,29 @@
+.tabbed-chat-tabs {
+  display: flex;
+  border-bottom: 1px solid #ccc;
+}
+.tab-button {
+  padding: 8px;
+  cursor: pointer;
+  background: #f0f0f0;
+  margin-right: 2px;
+}
+.tab-button.active {
+  background: #007acc;
+  color: white;
+}
+.tab-panel {
+  display: none;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.tab-panel.active {
+  display: block;
+}
+.chat-messages {
+  position: relative;
+}
+.phone-eavesdrop {
+  font-style: italic;
+  opacity: 0.8;
+}
