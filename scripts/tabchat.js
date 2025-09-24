@@ -73,4 +73,120 @@ class TabbedChatManager {
     // Render existing messages into tabs
     const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
     for (const message of messages) {
-      TabbedChatManager.renderMessage(message,
+      TabbedChatManager.renderMessage(message, $html);
+    }
+
+    // Initial scroll
+    TabbedChatManager._scrollBottom($html);
+  }
+
+  static async renderMessage(message, $html) {
+    const msgHtml = await message.render();
+    const tab = TabbedChatManager._getMessageTab(message);
+    if (tab && TabbedChatManager.tabPanels[tab]) {
+      TabbedChatManager.tabPanels[tab].append(msgHtml);
+      if (TabbedChatManager._activeTab === tab) {
+        TabbedChatManager._scrollBottom($html, tab);
+      }
+      // Add highlight animation inspired by tabbed-whispers.css
+      msgHtml.addClass('tabbed-whispers-highlight');
+      setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500); // ~8 iterations * 0.3s
+    }
+  }
+
+  static _getMessageTab(message) {
+    // Rolls tab
+    if (message.isRoll) return 'rolls';
+
+    // Whispers tab
+    if (message.whisper?.length > 0) return 'whisper';
+
+    // Optional: Manual /ooc prefix inspired by user input needs
+    if (message.content?.startsWith('/ooc ')) return 'ooc';
+
+    // IC/OOC logic
+    const speaker = message.speaker;
+    if (speaker?.token) {
+      const sceneId = speaker.scene;
+      if (sceneId !== canvas?.scene?.id) return 'ooc'; // Not current scene -> OOC (global)
+
+      const tokenDoc = canvas?.scene?.tokens?.get(speaker.token);
+      if (!tokenDoc) return 'ooc';
+
+      const controlledTokens = canvas?.tokens?.controlled;
+      if (controlledTokens.length === 0 || game.user.isGM) return 'ic'; // No controlled token or GM -> full IC visibility
+
+      // Proximity check (using first controlled token)
+      const controlled = controlledTokens[0];
+      const distance = canvas.grid.measureDistance(tokenDoc.center, controlled.center);
+      const range = game.settings.get(MODULE_ID, 'proximityRange') || 30;
+      if (distance <= range) return 'ic';
+    }
+
+    // Default to OOC (no token, far away, etc.)
+    return 'ooc';
+  }
+
+  static async updateMessage(message, msgHtml, $html) {
+    const tab = TabbedChatManager._getMessageTab(message);
+    if (tab && TabbedChatManager.tabPanels[tab]) {
+      const existing = TabbedChatManager.tabPanels[tab].find(`[data-message-id="${message.id}"]`);
+      if (existing.length) {
+        existing.replaceWith(msgHtml);
+        if (TabbedChatManager._activeTab === tab) {
+          TabbedChatManager._scrollBottom($html, tab);
+        }
+      }
+    }
+  }
+
+  static deleteMessage(messageId, $html) {
+    ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
+      TabbedChatManager.tabPanels[tab]?.find(`[data-message-id="${messageId}"]`).remove();
+    });
+  }
+
+  static _activateTab(tabName, $html) {
+    $html.find('.tabchat-tab').removeClass('active');
+    $html.find(`[data-tab="${tabName}"]`).addClass('active');
+    $html.find('.tabchat-panel').removeClass('active');
+    $html.find(`.tabchat-panel[data-tab="${tabName}"]`).addClass('active');
+    TabbedChatManager._activeTab = tabName;
+    TabbedChatManager._scrollBottom($html);
+  }
+
+  static _scrollBottom($html, tabName = TabbedChatManager._activeTab) {
+    const ol = $html.find(`.tabchat-panel[data-tab="${tabName}"] ol.chat-messages`);
+    if (ol?.length) {
+      ol.prop('scrollTop', ol[0].scrollHeight);
+    }
+  }
+}
+
+// Module Initialization
+Hooks.once('init', TabbedChatManager.init);
+
+Hooks.once('ready', TabbedChatManager.ready);
+
+// Inject tabs on chat render
+Hooks.on('renderChatLog', (app, html, data) => {
+  TabbedChatManager.injectTabs(app, html, data);
+});
+
+// Handle new messages
+Hooks.on('renderChatMessageHTML', async (message, html, data) => {
+  // Prevent default append; we handle it
+  html.remove();
+  await TabbedChatManager.renderMessage(message, $(ui.chat.element));
+});
+
+// Handle updates
+Hooks.on('updateChatMessage', async (message, update, options, userId) => {
+  const msgHtml = await message.render();
+  await TabbedChatManager.updateMessage(message, msgHtml, $(ui.chat.element));
+});
+
+// Handle deletes
+Hooks.on('deleteChatMessage', (message, options, userId) => {
+  TabbedChatManager.deleteMessage(message.id, $(ui.chat.element));
+});
