@@ -7,6 +7,7 @@ class TabbedChatManager {
   static tabPanels = {};
   static _activeTab = 'ic';
   static _initialized = false;
+  static _customHandledMessages = new Set();
 
   // ---------- Robust double-patch + hooks (replace existing init/ready/hooks block) ----------
   static init() {
@@ -54,6 +55,7 @@ class TabbedChatManager {
     }
     TabbedChatManager._initialized = true;
     console.log(`${MODULE_ID} | Ready`);
+    
     // Patch the actual ui.chat instance method too (defensive)
     try {
       if (ui.chat && typeof ui.chat._postOne === 'function') {
@@ -79,6 +81,7 @@ class TabbedChatManager {
     } catch (err) {
       console.warn(`${MODULE_ID} | Failed to patch ui.chat._postOne instance (continuing)`, err);
     }
+    
     // Failsafe: ensure a hidden ol exists so older code that expects it won't crash
     try {
       if (ui.chat && ui.chat.element && !ui.chat.element.find('ol.chat-messages').length) {
@@ -88,6 +91,7 @@ class TabbedChatManager {
     } catch (err) {
       console.warn(`${MODULE_ID} | Could not add dummy ol failsafe`, err);
     }
+    
     // Render existing messages (deferred as a safety)
     setTimeout(() => {
       try {
@@ -108,89 +112,78 @@ class TabbedChatManager {
 
   // ---------------- Hooks ----------------
   static setupHooks() {
-    // Inject tabs on chat render (renderChatLog still works; html may be HTMLElement or jQuery)
+    // Inject tabs on chat render
     Hooks.on('renderChatLog', async (app, html, data) => {
       await TabbedChatManager.injectTabs(app, html, data);
     });
     
-    // Track messages we're handling to prevent Foundry's default behavior
-    const customHandledMessages = new Set();
-    
-    // Mark pre-creation so we can suppress Foundry UI append in render hook
+    // Mark ALL new messages for custom handling - simpler approach
     Hooks.on('preCreateChatMessage', (doc, data, options, userId) => {
       try {
-        // Since doc.id might be null at this point, we'll use the content as a temporary identifier
-        const tempId = `${data.content}_${Date.now()}_${Math.random()}`;
-        customHandledMessages.add(tempId);
-        if (doc) doc._tempId = tempId;
-        console.log(`${MODULE_ID}: preCreateChatMessage flagged for custom handling`, { id: doc?.id, tempId, content: data?.content });
+        // Mark this message as one we'll handle
+        doc._tabchatCustomHandled = true;
+        console.log(`${MODULE_ID}: Marked message for custom handling`, { id: doc?.id, content: data?.content });
       } catch (err) {
         console.warn(`${MODULE_ID}: preCreateChatMessage handler error`, err);
       }
     });
     
-    // Add the actual message ID once it's created
-    Hooks.on('createChatMessage', (message) => {
-      try {
-        if (message._tempId && customHandledMessages.has(message._tempId)) {
-          customHandledMessages.delete(message._tempId);
-          customHandledMessages.add(message.id);
-          message._customHandled = true;
-          console.log(`${MODULE_ID}: Marked message as custom handled`, { id: message.id });
-        }
-      } catch (err) {
-        console.warn(`${MODULE_ID}: createChatMessage handler error`, err);
-      }
-    });
-    
-    // Intercept Foundry's render hook (v13 uses HTMLElement)
+    // Intercept Foundry's render hook - prevent default behavior for our messages
     Hooks.on('renderChatMessageHTML', (message, html, data) => {
       try {
-        const isCustom = customHandledMessages.has(message.id) || message._customHandled;
+        const isCustom = message._tabchatCustomHandled || TabbedChatManager._customHandledMessages.has(message.id);
         console.log(`${MODULE_ID}: Intercepting renderChatMessageHTML`, { id: message.id, custom: isCustom });
         
         if (isCustom) {
           // Prevent Foundry from appending this message to the default chat log
+          console.log(`${MODULE_ID}: Blocking default append for message`, message.id);
           return false;
         }
         return true;
       } catch (err) {
         console.error(`${MODULE_ID}: Error in renderChatMessageHTML hook`, err);
-        // If something goes wrong, don't block Foundry
         return true;
       }
     });
     
-    // Create/Update/Delete handlers
-    Hooks.on('createChatMessage', async (message, html, data) => {
-      // Handle the custom tracking first
+    // Handle message creation - this is where we actually render to our tabs
+    Hooks.on('createChatMessage', async (message, options, userId) => {
       try {
-        if (message._tempId && customHandledMessages.has(message._tempId)) {
-          customHandledMessages.delete(message._tempId);
-          customHandledMessages.add(message.id);
-          message._customHandled = true;
-          console.log(`${MODULE_ID}: Marked message as custom handled in create hook`, { id: message.id });
+        console.log(`${MODULE_ID}: createChatMessage hook`, { id: message.id, custom: message._tabchatCustomHandled });
+        
+        // Add to our tracking set
+        if (message._tabchatCustomHandled) {
+          TabbedChatManager._customHandledMessages.add(message.id);
+        }
+        
+        // Render to our tabbed interface
+        if (ui.chat?.element) {
+          await TabbedChatManager.renderMessage(message, $(ui.chat.element));
         }
       } catch (err) {
-        console.warn(`${MODULE_ID}: createChatMessage handler error`, err);
-      }
-      
-      // Then render the message to our tabbed interface
-      if (ui.chat?.element) {
-        await TabbedChatManager.renderMessage(message, $(ui.chat.element));
+        console.error(`${MODULE_ID}: Error in createChatMessage hook`, err);
       }
     });
     
     Hooks.on('updateChatMessage', async (message, update, options, userId) => {
-      if (ui.chat?.element) {
-        const msgHtml = $(await message.renderHTML());
-        await TabbedChatManager.updateMessage(message, msgHtml, $(ui.chat.element));
+      try {
+        if (ui.chat?.element) {
+          const msgHtml = $(await message.renderHTML());
+          await TabbedChatManager.updateMessage(message, msgHtml, $(ui.chat.element));
+        }
+      } catch (err) {
+        console.error(`${MODULE_ID}: Error in updateChatMessage hook`, err);
       }
     });
     
     Hooks.on('deleteChatMessage', (message, options, userId) => {
-      if (ui.chat?.element) {
-        TabbedChatManager.deleteMessage(message.id, $(ui.chat.element));
+      try {
+        if (ui.chat?.element) {
+          TabbedChatManager.deleteMessage(message.id, $(ui.chat.element));
+          TabbedChatManager._customHandledMessages.delete(message.id);
+        }
+      } catch (err) {
+        console.error(`${MODULE_ID}: Error in deleteChatMessage hook`, err);
       }
     });
     
@@ -206,6 +199,7 @@ class TabbedChatManager {
           ui.chat._postOne = ui.chat._tabchat_originalPostOne;
           delete ui.chat._tabchat_originalPostOne;
         }
+        TabbedChatManager._customHandledMessages.clear();
         console.log(`${MODULE_ID} | Restored original ChatLog._postOne on unload`);
       } catch (err) {
         console.warn(`${MODULE_ID} | Error restoring originals on unload`, err);
@@ -215,8 +209,8 @@ class TabbedChatManager {
 
   // ---------------- Core Methods ----------------
   static async injectTabs(app, html, data) {
-    if (!(html instanceof HTMLElement) || TabbedChatManager._initialized) {
-      console.log(`${MODULE_ID}: Skipping injection (already initialized or invalid HTML)`, { html });
+    if (TabbedChatManager._initialized) {
+      console.log(`${MODULE_ID}: Skipping injection (already initialized)`);
       return;
     }
 
@@ -250,7 +244,7 @@ class TabbedChatManager {
       const observer = new MutationObserver((mutations, obs) => {
         const ol = $html.find('ol.chat-messages') || $html.find('.chat-messages-container ol') || $html.find('ol');
         if (ol.length) {
-          console.log(`${MODULE_ID}: Chat OL detected by observer`, { olCount: ol.length, html: $html.html() });
+          console.log(`${MODULE_ID}: Chat OL detected by observer`, { olCount: ol.length });
           obs.disconnect();
           resolve();
         }
@@ -310,32 +304,25 @@ class TabbedChatManager {
     }
 
     let rendered;
-    if (message.type === 'base') {
-      rendered = `<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`;
-      console.log(`${MODULE_ID}: Custom rendered for base message`, { type: typeof rendered, value: rendered });
-    } else {
-      try {
-        rendered = await message.renderHTML();
-        console.log(`${MODULE_ID}: Rendered type (default)`, { type: typeof rendered, value: rendered });
-        if (!rendered) {
-          throw new Error('Render returned undefined');
-        }
-      } catch (e) {
-        console.error(`${MODULE_ID}: Error rendering message (default)`, {
-          error: e.message,
-          stack: e.stack,
-          message: {
-            id: message.id,
-            content: message.content,
-            type: message.type,
-            speaker: message.speaker,
-            whisper: message.whisper,
-            isRoll: message.isRoll,
-            data: message.data || 'Data unavailable'
-          }
-        });
-        rendered = `<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`;
+    try {
+      // Use Foundry's built-in rendering
+      rendered = await message.renderHTML();
+      console.log(`${MODULE_ID}: Rendered message`, { id: message.id, type: typeof rendered });
+      if (!rendered) {
+        throw new Error('Render returned undefined');
       }
+    } catch (e) {
+      console.error(`${MODULE_ID}: Error rendering message`, {
+        error: e.message,
+        message: {
+          id: message.id,
+          content: message.content,
+          type: message.type,
+          speaker: message.speaker
+        }
+      });
+      // Fallback rendering
+      rendered = `<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker?.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`;
     }
 
     let msgHtml = $(rendered);
@@ -343,44 +330,39 @@ class TabbedChatManager {
       console.error(`${MODULE_ID}: Invalid msgHtml after wrapping`, {
         msgHtml,
         renderedType: typeof rendered,
-        message: {
-          id: message.id,
-          content: message.content,
-          type: message.type,
-          speaker: message.speaker,
-          whisper: message.whisper
-        }
+        messageId: message.id
       });
       return;
     }
 
     const tab = TabbedChatManager._getMessageTab(message);
+    console.log(`${MODULE_ID}: Routing message to tab`, { id: message.id, tab: tab });
+    
     if (tab) {
-      if (!TabbedChatManager.tabPanels[tab]?.length) {
-        console.warn(`${MODULE_ID}: Tab panel for ${tab} not found, reinitializing`);
-        let defaultOl = $html.find('ol.chat-messages') || $html.find('.chat-messages-container ol') || $html.find('ol');
-        if (defaultOl.length) {
-          TabbedChatManager._replaceMessageList(defaultOl, $html);
-        } else {
-          console.error(`${MODULE_ID}: No OL found for reinitialization`, { html: $html.html() });
-        }
-      }
       const $panel = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
       if ($panel.length) {
-        console.log(`${MODULE_ID}: Attempting to append to ${tab} panel`, { panelExists: $panel.length });
+        console.log(`${MODULE_ID}: Appending to ${tab} panel`, { panelExists: $panel.length });
         $panel.append(msgHtml);
         if (TabbedChatManager._activeTab === tab) {
           TabbedChatManager._scrollBottom($html, tab);
         }
+        // Add highlight effect
         msgHtml.addClass('tabbed-whispers-highlight');
         setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
       } else {
-        console.warn(`${MODULE_ID}: No valid panel for ${tab}, using fallback`, { html: $html.html() });
-        TabbedChatManager.tabPanels['ooc']?.append(msgHtml);
+        console.warn(`${MODULE_ID}: No valid panel for ${tab}, using fallback`);
+        // Fallback to OOC tab
+        const fallbackPanel = $html.find(`.tabchat-panel[data-tab="ooc"] ol.chat-messages`);
+        if (fallbackPanel.length) {
+          fallbackPanel.append(msgHtml);
+        }
       }
     } else {
-      console.warn(`${MODULE_ID}: No valid tab for message, using fallback`, { message: { id: message.id, content: message.content, type: message.type } });
-      TabbedChatManager.tabPanels['ooc']?.append(msgHtml);
+      console.warn(`${MODULE_ID}: No valid tab for message, using fallback`);
+      const fallbackPanel = $html.find(`.tabchat-panel[data-tab="ooc"] ol.chat-messages`);
+      if (fallbackPanel.length) {
+        fallbackPanel.append(msgHtml);
+      }
     }
   }
 
@@ -411,16 +393,19 @@ class TabbedChatManager {
 
   static async updateMessage(message, msgHtml, $html) {
     if (!msgHtml || typeof msgHtml !== 'object' || !('addClass' in msgHtml)) {
-      console.error(`${MODULE_ID}: Invalid msgHtml in updateMessage()`, { msgHtml, message: { id: message.id, content: message.content, type: message.type } });
+      console.error(`${MODULE_ID}: Invalid msgHtml in updateMessage()`, { msgHtml, messageId: message.id });
       return;
     }
     const tab = TabbedChatManager._getMessageTab(message);
-    if (tab && TabbedChatManager.tabPanels[tab]?.length) {
-      const existing = TabbedChatManager.tabPanels[tab].find(`[data-message-id="${message.id}"]`);
-      if (existing.length) {
-        existing.replaceWith(msgHtml);
-        if (TabbedChatManager._activeTab === tab) {
-          TabbedChatManager._scrollBottom($html, tab);
+    if (tab) {
+      const $panel = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
+      if ($panel.length) {
+        const existing = $panel.find(`[data-message-id="${message.id}"]`);
+        if (existing.length) {
+          existing.replaceWith(msgHtml);
+          if (TabbedChatManager._activeTab === tab) {
+            TabbedChatManager._scrollBottom($html, tab);
+          }
         }
       }
     }
@@ -428,7 +413,10 @@ class TabbedChatManager {
 
   static deleteMessage(messageId, $html) {
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
-      TabbedChatManager.tabPanels[tab]?.find(`[data-message-id="${messageId}"]`).remove();
+      const $panel = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
+      if ($panel.length) {
+        $panel.find(`[data-message-id="${messageId}"]`).remove();
+      }
     });
   }
 
