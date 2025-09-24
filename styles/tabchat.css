@@ -1,53 +1,52 @@
-/* Tabbed Chat Styles - Inspired by tabbed-whispers.css */
+/* TabChat CSS - Fixes scrollbar issues */
 
 .tabchat-container {
-  height: 100%;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: hidden; /* Prevent container from creating its own scrollbar */
 }
 
 .tabchat-nav {
-  flex: 0;
-  margin: 0 0 5px;
-  border-bottom: 1px solid #215112; /* Changed from #ff6400 to #215112 */
-  box-shadow: 0 0 10px red; /* Keeping red shadow for contrast, can change if desired */
   display: flex;
-  justify-content: center; /* Center the tabs */
-  flex-direction: row; /* Ensure left-to-right order */
-  flex-wrap: nowrap; /* Prevent wrapping */
-  direction: ltr; /* Force left-to-right direction */
+  flex-shrink: 0; /* Don't allow nav to shrink */
+  border-bottom: 1px solid #666;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 0;
+  margin: 0;
 }
 
 .tabchat-tab {
-  padding: 8px 12px;
-  text-decoration: none;
-  color: var(--color-text-light-primary);
-  border: none;
-  background: none;
-  cursor: pointer;
-  font-size: var(--font-size-12);
-  transition: background 0.2s;
   flex: 1;
-  text-align: center; /* Center text within each tab */
-  max-width: 120px; /* Adjusted for better spacing with 4 tabs */
+  padding: 8px 12px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.3);
+  color: #ccc;
+  border: none;
+  border-right: 1px solid #666;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: bold;
 }
 
 .tabchat-tab:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .tabchat-tab.active {
+  background: rgba(255, 255, 255, 0.2);
   color: #fff;
-  border: 1px solid #215112; /* Changed from #ff0000 to #215112 */
-  border-bottom: none;
-  box-shadow: 0 0 6px inset #215112; /* Changed from #ff6400 to #215112 */
-  border-radius: 5px 5px 0 0;
 }
 
 .tabchat-panel {
+  flex: 1; /* Take up remaining height */
   display: none;
-  flex: 1;
-  overflow: hidden;
+  overflow: hidden; /* Let the inner ol handle scrolling */
+  position: relative;
 }
 
 .tabchat-panel.active {
@@ -56,31 +55,53 @@
 }
 
 .tabchat-panel ol.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0;
+  flex: 1; /* Take up all available height in the panel */
+  overflow-y: auto; /* Only this element should scroll */
+  overflow-x: hidden;
+  height: 100%; /* Ensure it takes full height */
+  max-height: none; /* Override any max-height restrictions */
   margin: 0;
+  padding: 0;
   list-style: none;
 }
 
-/* Highlight animation from tabbed-whispers */
-@keyframes chat-message-highlight {
-  from {
-    background-color: #e8e8ef;
-  }
-  to {
-    background-color: yellow;
-  }
+/* Hide any duplicate scrollbars from parent containers */
+#chat .chat-messages {
+  overflow: hidden !important; /* This hides the original chat-messages scrollbar */
 }
 
-.chat-message.tabbed-whispers-highlight {
-  animation-name: chat-message-highlight;
-  animation-duration: 0.3s;
-  animation-iteration-count: 8;
-  animation-direction: alternate;
+/* Ensure the chat sidebar itself handles height properly */
+#chat {
+  display: flex;
+  flex-direction: column;
 }
 
-/* Ensure chat messages fit */
+#chat .window-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Style individual chat messages within tabs */
 .tabchat-panel .chat-message {
-  margin-bottom: 8px;
+  margin: 4px 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Highlight effect for new messages */
+.tabbed-whispers-highlight {
+  animation: messageHighlight 2.5s ease-out;
+}
+
+@keyframes messageHighlight {
+  0% { 
+    background-color: rgba(255, 255, 0, 0.3);
+    box-shadow: 0 0 8px rgba(255, 255, 0, 0.5);
+  }
+  100% { 
+    background-color: transparent;
+    box-shadow: none;
+  }
 }
