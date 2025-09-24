@@ -24,9 +24,8 @@ class TabbedChatManager {
       ChatLog.prototype._tabchat_originalPostOne = ChatLog.prototype._postOne;
       ChatLog.prototype._postOne = async function (...args) {
         try {
-          // If our tab UI exists in this chat element, suppress default posting.
-          // Otherwise, call original behavior so other modules / vanilla UI still work.
-          const $el = this.element;
+          // Ensure this.element is valid before proceeding
+          const $el = this?.element ? $(this.element) : null;
           if ($el && $el.find && $el.find('.tabchat-container').length) {
             console.log(`${MODULE_ID}: Suppressing ChatLog._postOne because tabchat is present`);
             return;
@@ -57,7 +56,7 @@ class TabbedChatManager {
         if (!ui.chat._tabchat_originalPostOne) ui.chat._tabchat_originalPostOne = ui.chat._postOne;
         ui.chat._postOne = async function (...args) {
           try {
-            const $el = this.element;
+            const $el = this?.element ? $(this.element) : null;
             if ($el && $el.find && $el.find('.tabchat-container').length) {
               console.log(`${MODULE_ID}: Suppressing ui.chat._postOne because tabchat is present`);
               return;
