@@ -18,12 +18,12 @@ class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
     if (!defaultOl.length) {
       defaultOl = $html.find('.chat-messages-container ol') || $html.find('ol');
       if (!defaultOl.length) {
-        console.error(`${MODULE_ID}: No chat-messages OL found in DOM`, { html: $html.html() });
-        return html; // Fallback to default if no OL exists
+        console.error(`${MODULE_ID}: No chat-messages OL found in DOM`, { htmlContent: $html.html() });
+        return this._forceFallbackChat($html, html); // Fallback if no OL
       }
     }
 
-    console.log(`${MODULE_ID}: Found default OL, replacing with tabs`, { olCount: defaultOl.length });
+    console.log(`${MODULE_ID}: Initial DOM state`, { olCount: defaultOl.length, htmlBefore: $html.html() });
 
     const tabHtml = `
       <div class="tabchat-container">
@@ -41,20 +41,21 @@ class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
         `).join('')}
       </div>
     `;
-    defaultOl.replaceWith(tabHtml);
+    const $tabHtml = $(tabHtml);
+    defaultOl.replaceWith($tabHtml);
 
     // Verify injection
     const $tabContainer = $html.find('.tabchat-container');
     if (!$tabContainer.length) {
-      console.error(`${MODULE_ID}: Tab container not injected`, { html: $html.html() });
-      return html;
+      console.error(`${MODULE_ID}: Tab container not injected`, { htmlAfter: $html.html() });
+      return this._forceFallbackChat($html, html);
     }
-    console.log(`${MODULE_ID}: Tab container injected successfully`, { tabCount: $html.find('.tabchat-tab').length });
+    console.log(`${MODULE_ID}: Tab container injected`, { tabCount: $html.find('.tabchat-tab').length, htmlAfter: $html.html() });
 
     // Cache panels
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
       this.tabPanels[tab] = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
-      console.log(`${MODULE_ID}: Cached panel for ${tab}`, { exists: !!this.tabPanels[tab].length });
+      console.log(`${MODULE_ID}: Cached panel for ${tab}`, { exists: !!this.tabPanels[tab].length, panelHtml: this.tabPanels[tab].html() });
     });
 
     // Bind clicks
@@ -67,7 +68,15 @@ class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
     }
 
     this._scrollBottom();
-    return html;
+    return $html[0]; // Return the DOM element to ensure changes are applied
+  }
+
+  _forceFallbackChat($html, originalHtml) {
+    console.warn(`${MODULE_ID}: Falling back to single chat due to injection failure`);
+    const $fallbackOl = $('<ol class="chat-messages"></ol>');
+    $html.find('ol.chat-messages, .chat-messages-container ol, ol').replaceWith($fallbackOl);
+    this.tabPanels['ooc'] = $fallbackOl; // Use OOC as default fallback
+    return $html[0];
   }
 
   async renderMessage(message) {
@@ -94,7 +103,8 @@ class TabbedChatLog extends foundry.applications.sidebar.tabs.ChatLog {
       msgHtml.addClass('tabbed-whispers-highlight');
       setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
     } else {
-      console.warn(`${MODULE_ID}: No valid tab or panel for message`, { tab, panels: this.tabPanels, message: { id: message.id, type: message.type } });
+      console.warn(`${MODULE_ID}: No valid tab or panel for message, using fallback`, { tab, panels: this.tabPanels, message: { id: message.id, type: message.type } });
+      this.tabPanels['ooc']?.append(msgHtml); // Fallback to OOC if tab fails
     }
   }
 
