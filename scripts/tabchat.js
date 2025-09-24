@@ -27,6 +27,19 @@ class TabbedChatManager {
     }
     TabbedChatManager._initialized = true;
     console.log(`${MODULE_ID} | Ready`);
+    // Delay as a fallback to render existing messages
+    setTimeout(() => {
+      if (!ui.chat?.element) {
+        console.warn(`${MODULE_ID}: UI not ready, skipping existing message rendering`);
+        return;
+      }
+      const $html = $(ui.chat.element);
+      const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
+      for (const message of messages) {
+        console.log(`${MODULE_ID}: Rendering existing message (fallback)`, { id: message.id, data: message.data });
+        TabbedChatManager.renderMessage(message, $html);
+      }
+    }, 5000); // 5-second delay
   }
 
   static async injectTabs(app, html, data) {
@@ -36,22 +49,50 @@ class TabbedChatManager {
     }
 
     const $html = $(html);
+    console.log(`${MODULE_ID}: Initial ChatLog DOM structure`, { html: $html.html() });
+
     let defaultOl = $html.find('ol.chat-messages');
     if (!defaultOl.length) {
-      defaultOl = $html.find('.chat-messages-container ol') || $html.find('ol');
+      defaultOl = $html.find('.chat-messages-container ol');
+    }
+    if (!defaultOl.length) {
+      defaultOl = $html.find('ol'); // Broad fallback
+    }
+    if (!defaultOl.length) {
+      console.warn(`${MODULE_ID}: No <ol> found initially, setting up observer`, { html: $html.html() });
+      await TabbedChatManager._waitForChatOl($html);
+      defaultOl = $html.find('ol.chat-messages') || $html.find('.chat-messages-container ol') || $html.find('ol');
       if (!defaultOl.length) {
-        console.warn(`${MODULE_ID}: No chat-messages OL found initially, setting up observer`, { html: $html.html() });
-        await TabbedChatManager._waitForChatOl($html);
-        defaultOl = $html.find('ol.chat-messages') || $html.find('.chat-messages-container ol') || $html.find('ol');
-        if (!defaultOl.length) {
-          console.error(`${MODULE_ID}: Failed to find OL after waiting`, { html: $html.html() });
-          return;
-        }
+        console.error(`${MODULE_ID}: Failed to find OL after waiting, attempting reinitialization`, { html: $html.html() });
+        TabbedChatManager._initialized = false; // Allow reinitialization
+        return; // Retry on next render
       }
     }
 
-    console.log(`${MODULE_ID}: Injecting tabs into DOM`, { olCount: defaultOl.length, htmlBefore: $html.html() });
+    TabbedChatManager._replaceMessageList(defaultOl, $html);
+    TabbedChatManager._initialized = true;
+  }
 
+  static _waitForChatOl($html) {
+    return new Promise((resolve) => {
+      const observer = new MutationObserver((mutations, obs) => {
+        const ol = $html.find('ol.chat-messages') || $html.find('.chat-messages-container ol') || $html.find('ol');
+        if (ol.length) {
+          console.log(`${MODULE_ID}: Chat OL detected by observer`, { olCount: ol.length, html: $html.html() });
+          obs.disconnect();
+          resolve();
+        }
+      });
+      observer.observe($html[0], { childList: true, subtree: true });
+      setTimeout(() => {
+        observer.disconnect();
+        console.warn(`${MODULE_ID}: Observer timed out waiting for OL after 10 seconds`);
+        resolve();
+      }, 10000); // 10-second timeout
+    });
+  }
+
+  static _replaceMessageList(defaultOl, $html) {
     const tabHtml = `
       <div class="tabchat-container">
         <nav class="tabchat-nav">
@@ -70,16 +111,16 @@ class TabbedChatManager {
     `;
     defaultOl.replaceWith(tabHtml);
 
-    const $tabContainer = $html.find('.tabchat-container');
-    if (!$tabContainer.length) {
-      console.error(`${MODULE_ID}: Failed to inject tab container`, { htmlAfter: $html.html() });
-      return;
-    }
-    console.log(`${MODULE_ID}: Tabs injected successfully`, { tabCount: $html.find('.tabchat-tab').length });
+    console.log(`${MODULE_ID}: Injected tab order`, { tabs: $html.find('.tabchat-nav .tabchat-tab').map((i, el) => $(el).data('tab')).get() });
 
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
-      TabbedChatManager.tabPanels[tab] = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
-      console.log(`${MODULE_ID}: Cached panel for ${tab}`, { exists: !!TabbedChatManager.tabPanels[tab].length });
+      const panel = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
+      TabbedChatManager.tabPanels[tab] = panel;
+      if (!panel.length) {
+        console.error(`${MODULE_ID}: Failed to cache panel for tab ${tab}`, { domCheck: $html.find(`.tabchat-panel[data-tab="${tab}"]`).length ? 'Panel exists, no OL' : 'Panel missing' });
+      } else {
+        console.log(`${MODULE_ID}: Successfully cached panel for ${tab}`);
+      }
     });
 
     $html.find('.tabchat-nav').on('click', '.tabchat-tab', (event) => {
@@ -88,52 +129,85 @@ class TabbedChatManager {
     });
 
     TabbedChatManager._scrollBottom($html);
-    TabbedChatManager._initialized = true;
-  }
-
-  static _waitForChatOl($html) {
-    return new Promise((resolve) => {
-      const observer = new MutationObserver((mutations, obs) => {
-        const ol = $html.find('ol.chat-messages') || $html.find('.chat-messages-container ol') || $html.find('ol');
-        if (ol.length) {
-          console.log(`${MODULE_ID}: Chat OL detected by observer`, { olCount: ol.length });
-          obs.disconnect();
-          resolve();
-        }
-      });
-      observer.observe($html[0], { childList: true, subtree: true });
-      setTimeout(() => {
-        observer.disconnect();
-        console.warn(`${MODULE_ID}: Observer timed out waiting for OL`);
-        resolve();
-      }, 5000); // 5-second timeout
-    });
   }
 
   static async renderMessage(message, $html) {
-    let rendered = await message.renderHTML();
-    if (!rendered) {
-      rendered = document.createElement('li');
-      rendered.className = 'chat-message';
-      rendered.dataset.messageId = message.id;
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'message-content';
-      contentDiv.textContent = `[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}`;
-      rendered.appendChild(contentDiv);
+    if (!message || typeof message !== 'object') {
+      console.error(`${MODULE_ID}: Invalid message object`, { message });
+      return;
     }
-    const msgHtml = $(rendered);
+
+    let rendered;
+    if (message.type === 'base') {
+      rendered = `<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`;
+      console.log(`${MODULE_ID}: Custom rendered for base message`, { type: typeof rendered, value: rendered });
+    } else {
+      try {
+        rendered = await message.renderHTML();
+        console.log(`${MODULE_ID}: Rendered type (default)`, { type: typeof rendered, value: rendered });
+        if (!rendered) {
+          throw new Error('Render returned undefined');
+        }
+      } catch (e) {
+        console.error(`${MODULE_ID}: Error rendering message (default)`, {
+          error: e.message,
+          stack: e.stack,
+          message: {
+            id: message.id,
+            content: message.content,
+            type: message.type,
+            speaker: message.speaker,
+            whisper: message.whisper,
+            isRoll: message.isRoll,
+            data: message.data || 'Data unavailable'
+          }
+        });
+        rendered = `<li class="chat-message" data-message-id="${message.id}"><div class="message-content">[${message.type.toUpperCase()}] ${message.speaker.alias || 'Unknown'}: ${message.content || 'No content'}</div></li>`;
+      }
+    }
+
+    let msgHtml = $(rendered);
+    if (!msgHtml || typeof msgHtml !== 'object' || !('addClass' in msgHtml)) {
+      console.error(`${MODULE_ID}: Invalid msgHtml after wrapping`, {
+        msgHtml,
+        renderedType: typeof rendered,
+        message: {
+          id: message.id,
+          content: message.content,
+          type: message.type,
+          speaker: message.speaker,
+          whisper: message.whisper
+        }
+      });
+      return;
+    }
 
     const tab = TabbedChatManager._getMessageTab(message);
-    if (tab && TabbedChatManager.tabPanels[tab]) {
-      console.log(`${MODULE_ID}: Rendering message to ${tab} tab`, { id: message.id, content: message.content });
-      TabbedChatManager.tabPanels[tab].append(msgHtml);
-      if (TabbedChatManager._activeTab === tab) {
-        TabbedChatManager._scrollBottom($html, tab);
+    if (tab) {
+      if (!TabbedChatManager.tabPanels[tab]?.length) {
+        console.warn(`${MODULE_ID}: Tab panel for ${tab} not found, reinitializing`);
+        let defaultOl = $html.find('ol.chat-messages') || $html.find('.chat-messages-container ol') || $html.find('ol');
+        if (defaultOl.length) {
+          TabbedChatManager._replaceMessageList(defaultOl, $html);
+        } else {
+          console.error(`${MODULE_ID}: No OL found for reinitialization`, { html: $html.html() });
+        }
       }
-      msgHtml.addClass('tabbed-whispers-highlight');
-      setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
+      const $panel = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
+      if ($panel.length) {
+        console.log(`${MODULE_ID}: Attempting to append to ${tab} panel`, { panelExists: $panel.length });
+        $panel.append(msgHtml);
+        if (TabbedChatManager._activeTab === tab) {
+          TabbedChatManager._scrollBottom($html, tab);
+        }
+        msgHtml.addClass('tabbed-whispers-highlight');
+        setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
+      } else {
+        console.warn(`${MODULE_ID}: No valid panel for ${tab}, using fallback`, { html: $html.html() });
+        TabbedChatManager.tabPanels['ooc']?.append(msgHtml);
+      }
     } else {
-      console.warn(`${MODULE_ID}: No valid tab or panel, using fallback`, { tab, panels: TabbedChatManager.tabPanels });
+      console.warn(`${MODULE_ID}: No valid tab for message, using fallback`, { message: { id: message.id, content: message.content, type: message.type } });
       TabbedChatManager.tabPanels['ooc']?.append(msgHtml);
     }
   }
@@ -163,10 +237,33 @@ class TabbedChatManager {
     return 'ooc';
   }
 
+  static async updateMessage(message, msgHtml, $html) {
+    if (!msgHtml || typeof msgHtml !== 'object' || !('addClass' in msgHtml)) {
+      console.error(`${MODULE_ID}: Invalid msgHtml in updateMessage()`, { msgHtml, message: { id: message.id, content: message.content, type: message.type } });
+      return;
+    }
+    const tab = TabbedChatManager._getMessageTab(message);
+    if (tab && TabbedChatManager.tabPanels[tab]?.length) {
+      const existing = TabbedChatManager.tabPanels[tab].find(`[data-message-id="${message.id}"]`);
+      if (existing.length) {
+        existing.replaceWith(msgHtml);
+        if (TabbedChatManager._activeTab === tab) {
+          TabbedChatManager._scrollBottom($html, tab);
+        }
+      }
+    }
+  }
+
+  static deleteMessage(messageId, $html) {
+    ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
+      TabbedChatManager.tabPanels[tab]?.find(`[data-message-id="${messageId}"]`).remove();
+    });
+  }
+
   static _activateTab(tabName, $html) {
     $html.find('.tabchat-tab').removeClass('active');
     $html.find(`[data-tab="${tabName}"]`).addClass('active');
-    $html.find('.tabchat-panel').removeClass('active');
+    $html.find('.chat-panel').removeClass('active');
     $html.find(`.tabchat-panel[data-tab="${tabName}"]`).addClass('active');
     TabbedChatManager._activeTab = tabName;
     TabbedChatManager._scrollBottom($html);
@@ -190,23 +287,33 @@ Hooks.on('renderChatLog', async (app, html, data) => {
   await TabbedChatManager.injectTabs(app, html, data);
 });
 
-// Prevent default append and handle messages
-Hooks.on('renderChatMessageHTML', (message, html, data) => {
-  if (html) html.remove();
-  return false;
+// Prevent Foundry's default appending with pre-hook
+Hooks.on('preCreateChatMessage', (message, data, options, userId) => {
+  console.log(`${MODULE_ID}: Pre-creating message, marking for custom handling`, { id: message.id, content: message.content });
+  message._customHandled = true;
 });
 
+Hooks.on('renderChatMessageHTML', (message, html, data) => {
+  console.log(`${MODULE_ID}: Intercepting renderChatMessageHTML`, { id: message.id, htmlExists: !!html });
+  if (message._customHandled) {
+    if (html) html.remove();
+    return false;
+  }
+  return true;
+});
+
+// Handle new messages
 Hooks.on('createChatMessage', async (message, html, data) => {
   await TabbedChatManager.renderMessage(message, $(ui.chat.element));
 });
 
+// Handle updates
 Hooks.on('updateChatMessage', async (message, update, options, userId) => {
-  await TabbedChatManager.renderMessage(message, $(ui.chat.element));
+  const msgHtml = $(await message.renderHTML());
+  await TabbedChatManager.updateMessage(message, msgHtml, $(ui.chat.element));
 });
 
+// Handle deletes
 Hooks.on('deleteChatMessage', (message, options, userId) => {
-  const $html = $(ui.chat.element);
-  ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
-    TabbedChatManager.tabPanels[tab]?.find(`[data-message-id="${message.id}"]`).remove();
-  });
+  TabbedChatManager.deleteMessage(message.id, $(ui.chat.element));
 });
