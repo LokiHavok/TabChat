@@ -7,6 +7,7 @@ class TabbedChatManager {
   static tabPanels = {};
   static _activeTab = 'world';
   static _hasInjectedTabs = false;
+  static _processingMessage = false;
 
   static init() {
     console.log(`${MODULE_ID} | CLEAN WORKING - Init called`);
@@ -44,18 +45,31 @@ class TabbedChatManager {
       return true;
     });
     
-    // Handle new messages - with lockup prevention
+    // Handle new messages - with enhanced lockup prevention
     Hooks.on('createChatMessage', (message) => {
-      if (TabbedChatManager._hasInjectedTabs) {
-        // Prevent lockup with immediate timeout
-        setTimeout(() => {
-          try {
-            TabbedChatManager.renderMessage(message);
-          } catch (err) {
-            console.error(`${MODULE_ID}: Error in createChatMessage:`, err);
-          }
-        }, 10);
+      // Prevent recursive processing that could cause lockups
+      if (TabbedChatManager._processingMessage || !TabbedChatManager._hasInjectedTabs) {
+        return;
       }
+      
+      console.log(`${MODULE_ID}: Processing new message ${message.id}`);
+      
+      // Set processing flag
+      TabbedChatManager._processingMessage = true;
+      
+      // Use longer delay to ensure DOM is stable
+      setTimeout(() => {
+        try {
+          TabbedChatManager.renderMessage(message);
+        } catch (err) {
+          console.error(`${MODULE_ID}: Error rendering message:`, err);
+        } finally {
+          // Always clear the processing flag
+          setTimeout(() => {
+            TabbedChatManager._processingMessage = false;
+          }, 100);
+        }
+      }, 100);
     });
   }
 
@@ -107,6 +121,7 @@ class TabbedChatManager {
       ">
         <nav class="tabchat-nav" style="
           display: flex;
+          flex-direction: row;
           flex-shrink: 0;
           background: #1a1a1a;
           border-bottom: 2px solid #215112;
@@ -115,6 +130,7 @@ class TabbedChatManager {
           padding: 0;
         ">
           <div class="tabchat-tab active" data-tab="world" style="
+            order: 1;
             flex: 1;
             padding: 12px 8px;
             cursor: pointer;
@@ -131,6 +147,7 @@ class TabbedChatManager {
             transition: all 0.2s ease;
           ">WORLD</div>
           <div class="tabchat-tab" data-tab="ooc" style="
+            order: 2;
             flex: 1;
             padding: 12px 8px;
             cursor: pointer;
@@ -147,6 +164,7 @@ class TabbedChatManager {
             transition: all 0.2s ease;
           ">OOC</div>
           <div class="tabchat-tab" data-tab="game" style="
+            order: 3;
             flex: 1;
             padding: 12px 8px;
             cursor: pointer;
@@ -163,6 +181,7 @@ class TabbedChatManager {
             transition: all 0.2s ease;
           ">GAME</div>
           <div class="tabchat-tab" data-tab="messages" style="
+            order: 4;
             flex: 1;
             padding: 12px 8px;
             cursor: pointer;
@@ -262,62 +281,69 @@ class TabbedChatManager {
       messages: $chat.find('.tabchat-panel[data-tab="messages"] .chat-messages')
     };
 
-    // Set up click handlers with lockup prevention
+    // Set up click handlers with enhanced lockup prevention
     $chat.off('click.tabchat').on('click.tabchat', '.tabchat-tab', function(event) {
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
       
+      // Prevent clicking during message processing
+      if (TabbedChatManager._processingMessage) {
+        console.log(`${MODULE_ID}: Ignoring click during message processing`);
+        return;
+      }
+      
       // Prevent rapid clicking
-      if ($(this).hasClass('clicking')) return;
-      $(this).addClass('clicking');
-      setTimeout(() => $(this).removeClass('clicking'), 200);
+      const $clickedTab = $(this);
+      if ($clickedTab.hasClass('clicking')) {
+        console.log(`${MODULE_ID}: Ignoring rapid click`);
+        return;
+      }
       
-      const $tab = $(this);
-      const tabName = $tab.data('tab');
+      $clickedTab.addClass('clicking');
+      setTimeout(() => $clickedTab.removeClass('clicking'), 300);
       
+      const tabName = $clickedTab.data('tab');
       console.log(`${MODULE_ID}: Clean tab clicked: ${tabName}`);
       
       try {
-        // Update tab styles with hover effects
-        $chat.find('.tabchat-tab').each(function() {
-          $(this).removeClass('active').css({
-            'background': '#2a2a2a',
-            'color': '#999'
-          }).on('mouseenter', function() {
-            if (!$(this).hasClass('active')) {
-              $(this).css('background', '#3a3a3a');
-            }
-          }).on('mouseleave', function() {
-            if (!$(this).hasClass('active')) {
-              $(this).css('background', '#2a2a2a');
-            }
+        // Force immediate DOM updates to prevent conflicts
+        requestAnimationFrame(() => {
+          // Update tab styles
+          $chat.find('.tabchat-tab').each(function() {
+            const $tab = $(this);
+            $tab.removeClass('active').css({
+              'background': '#2a2a2a',
+              'color': '#999'
+            });
           });
-        });
-        
-        $tab.addClass('active').css({
-          'background': '#215112',
-          'color': '#fff'
-        }).off('mouseenter mouseleave');
-        
-        // Update panels
-        $chat.find('.tabchat-panel').removeClass('active').css('display', 'none');
-        $chat.find(`.tabchat-panel[data-tab="${tabName}"]`).addClass('active').css('display', 'flex');
-        
-        TabbedChatManager._activeTab = tabName;
-        
-        // Auto-scroll
-        const panel = TabbedChatManager.tabPanels[tabName];
-        if (panel && panel[0]) {
+          
+          $clickedTab.addClass('active').css({
+            'background': '#215112',
+            'color': '#fff'
+          });
+          
+          // Update panels
+          $chat.find('.tabchat-panel').removeClass('active').css('display', 'none');
+          $chat.find(`.tabchat-panel[data-tab="${tabName}"]`).addClass('active').css('display', 'flex');
+          
+          TabbedChatManager._activeTab = tabName;
+          
+          // Auto-scroll after tab switch
           setTimeout(() => {
-            panel[0].scrollTop = panel[0].scrollHeight;
+            const panel = TabbedChatManager.tabPanels[tabName];
+            if (panel && panel[0]) {
+              panel[0].scrollTop = panel[0].scrollHeight;
+            }
           }, 50);
-        }
-        
-        console.log(`${MODULE_ID}: Switched to ${tabName}`);
+          
+          console.log(`${MODULE_ID}: Successfully switched to ${tabName}`);
+        });
         
       } catch (err) {
         console.error(`${MODULE_ID}: Error in click handler:`, err);
+        // Try to reset the clicking flag even on error
+        $clickedTab.removeClass('clicking');
       }
     });
 
