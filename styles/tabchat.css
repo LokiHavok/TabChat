@@ -1,4 +1,5 @@
-/* Tabbed Chat Module CSS - Extracted from v0 */
+/* Tabbed Chat Module CSS - Fixed Version */
+
 /* Main container for the entire tabbed chat interface */
 .tabchat-container {
   height: 100% !important;
@@ -18,39 +19,43 @@
   position: relative !important;
 }
 
-/* Individual tab styling */
+/* Individual tab styling - SMALLER TEXT */
 .tabchat-tab {
   flex: 1 !important;
-  padding: 16px 8px !important;
+  padding: 12px 6px !important;
   text-align: center !important;
   background: rgba(0, 0, 0, 0.5) !important;
   color: #ccc !important;
-  font-size: 18px !important;
+  font-size: 14px !important;  /* Reduced from 18px */
   font-weight: bold !important;
   cursor: pointer !important;
   transition: all 0.2s ease !important;
   user-select: none !important;
   pointer-events: auto !important;
   position: relative !important;
+  border: none !important;
+  text-decoration: none !important;
 }
 
 /* Tab hover effects */
 .tabchat-tab:hover {
   background: rgba(255, 255, 255, 0.1) !important;
   color: #fff !important;
+  text-decoration: none !important;
 }
 
-/* Active tab styling */
+/* Active tab styling - GREEN ACTIVE TAB */
 .tabchat-tab.active {
-  background: rgba(255, 255, 255, 0.15) !important;
+  background: rgba(76, 175, 80, 0.3) !important;  /* Green background */
   color: #fff !important;
-  border-bottom: 3px solid #4CAF50 !important;
+  border-bottom: 3px solid #4CAF50 !important;    /* Green bottom border */
+  text-decoration: none !important;
 }
 
 /* Visual separators between tabs */
 .tabchat-separator {
   width: 2px !important;
-  height: 50px !important;
+  height: 40px !important;  /* Reduced from 50px */
   background: #666 !important;
   flex-shrink: 0 !important;
 }
@@ -75,4 +80,42 @@
   margin: 0 !important;
   padding: 0 !important;
   list-style: none !important;
+}
+
+/* DEFAULT CHAT MESSAGE FORMATTING - Time on right, content on left */
+.tabchat-panel .message {
+  display: flex !important;
+  align-items: flex-start !important;
+  margin-bottom: 8px !important;
+  padding: 4px 8px !important;
+}
+
+.tabchat-panel .message-content {
+  flex: 1 !important;
+  margin-right: 8px !important;
+}
+
+.tabchat-panel .message-timestamp {
+  flex-shrink: 0 !important;
+  font-size: 11px !important;
+  color: #999 !important;
+  margin-left: auto !important;
+}
+
+/* Ensure proper message styling inheritance from Foundry */
+.tabchat-panel .chat-message {
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* OOC and Global message prefixes */
+.tabchat-ooc-prefix {
+  color: #ff9800 !important;
+  font-weight: bold !important;
+}
+
+.tabchat-global-prefix {
+  color: #2196f3 !important;
+  font-weight: bold !important;
 }
