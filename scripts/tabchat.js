@@ -7,6 +7,7 @@ class TabbedChatManager {
   static tabPanels = {};
   static _activeTab = 'ic';
   static _initialized = false;
+  static _suppressScrolling = false;
 
   static init() {
     console.log(`${MODULE_ID} | CORE VERSION - Init called`);
@@ -71,24 +72,10 @@ class TabbedChatManager {
       console.warn(`${MODULE_ID} | Failed to patch ui.chat._postOne instance (continuing)`, err);
     }
     
-    // Render existing messages after a delay
+    // Render existing messages after tab UI is ready
     setTimeout(() => {
-      try {
-        if (!ui.chat?.element) {
-          console.warn(`${MODULE_ID}: UI not ready, skipping existing message rendering`);
-          return;
-        }
-        const $html = $(ui.chat.element);
-        const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
-        console.log(`${MODULE_ID}: Loading ${messages.length} existing messages`);
-        for (const message of messages) {
-          TabbedChatManager.renderMessage(message, $html);
-        }
-        console.log(`${MODULE_ID}: Finished loading existing messages`);
-      } catch (err) {
-        console.error(`${MODULE_ID} | Error rendering existing messages`, err);
-      }
-    }, 1500);
+      TabbedChatManager._loadExistingMessages();
+    }, 2000);
   }
 
   static setupHooks() {
@@ -176,6 +163,57 @@ class TabbedChatManager {
     });
   }
 
+  // Better existing message loading to prevent scroll/visual issues
+  static async _loadExistingMessages() {
+    try {
+      if (!ui.chat?.element) {
+        console.warn(`${MODULE_ID}: UI not ready, retrying in 1 second`);
+        setTimeout(() => TabbedChatManager._loadExistingMessages(), 1000);
+        return;
+      }
+
+      const $html = $(ui.chat.element);
+      
+      // Ensure tab panels are properly initialized
+      if (!TabbedChatManager.tabPanels.ic?.length) {
+        console.warn(`${MODULE_ID}: Tab panels not ready, retrying in 1 second`);
+        setTimeout(() => TabbedChatManager._loadExistingMessages(), 1000);
+        return;
+      }
+
+      const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
+      console.log(`${MODULE_ID}: Loading ${messages.length} existing messages in batches`);
+
+      // Disable auto-scrolling during bulk load
+      const originalActiveTab = TabbedChatManager._activeTab;
+      TabbedChatManager._suppressScrolling = true;
+
+      // Load messages in small batches to prevent UI overwhelm
+      const batchSize = 10;
+      for (let i = 0; i < messages.length; i += batchSize) {
+        const batch = messages.slice(i, i + batchSize);
+        for (const message of batch) {
+          await TabbedChatManager.renderMessage(message, $html);
+        }
+        // Small delay between batches to let UI catch up
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      // Re-enable scrolling and force scroll to bottom on active tab
+      TabbedChatManager._suppressScrolling = false;
+      
+      // Force scroll to bottom after all messages loaded
+      setTimeout(() => {
+        TabbedChatManager._forceScrollToBottom($html, originalActiveTab);
+        console.log(`${MODULE_ID}: Finished loading existing messages and scrolled to bottom`);
+      }, 200);
+
+    } catch (err) {
+      console.error(`${MODULE_ID} | Error loading existing messages`, err);
+      TabbedChatManager._suppressScrolling = false;
+    }
+  }
+
   // Core Methods
   static async injectTabs(app, html, data) {
     if (!(html instanceof HTMLElement)) {
@@ -246,23 +284,23 @@ class TabbedChatManager {
     
     const tabHtml = `
       <div class="tabchat-container" style="height: 100%; display: flex; flex-direction: column;">
-        <nav class="tabchat-nav" style="display: flex; flex-direction: row; flex-shrink: 0; height: auto;">
+        <nav class="tabchat-nav" style="display: flex; flex-direction: row; flex-shrink: 0; height: auto; border-bottom: 1px solid #444;">
           <a class="tabchat-tab" data-tab="whisper" style="padding: 8px 12px; cursor: pointer;">MESSAGES</a>
           <a class="tabchat-tab" data-tab="rolls" style="padding: 8px 12px; cursor: pointer;">GAME</a>
           <a class="tabchat-tab" data-tab="ooc" style="padding: 8px 12px; cursor: pointer;">OOC</a>
           <a class="tabchat-tab active" data-tab="ic" style="padding: 8px 12px; cursor: pointer;">WORLD</a>
         </nav>
-        <section class="tabchat-panel active" data-tab="ic" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 0; margin: 0; list-style: none;"></ol>
+        <section class="tabchat-panel active" data-tab="ic" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
+          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 4px; margin: 0; list-style: none; min-height: 0; height: 100%;"></ol>
         </section>
-        <section class="tabchat-panel" data-tab="ooc" style="flex: 1; display: none; flex-direction: column; overflow: hidden;">
-          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 0; margin: 0; list-style: none;"></ol>
+        <section class="tabchat-panel" data-tab="ooc" style="flex: 1; display: none; flex-direction: column; overflow: hidden; min-height: 0;">
+          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 4px; margin: 0; list-style: none; min-height: 0; height: 100%;"></ol>
         </section>
-        <section class="tabchat-panel" data-tab="rolls" style="flex: 1; display: none; flex-direction: column; overflow: hidden;">
-          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 0; margin: 0; list-style: none;"></ol>
+        <section class="tabchat-panel" data-tab="rolls" style="flex: 1; display: none; flex-direction: column; overflow: hidden; min-height: 0;">
+          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 4px; margin: 0; list-style: none; min-height: 0; height: 100%;"></ol>
         </section>
-        <section class="tabchat-panel" data-tab="whisper" style="flex: 1; display: none; flex-direction: column; overflow: hidden;">
-          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 0; margin: 0; list-style: none;"></ol>
+        <section class="tabchat-panel" data-tab="whisper" style="flex: 1; display: none; flex-direction: column; overflow: hidden; min-height: 0;">
+          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 4px; margin: 0; list-style: none; min-height: 0; height: 100%;"></ol>
         </section>
       </div>
     `;
@@ -375,8 +413,8 @@ class TabbedChatManager {
       msgHtml.addClass('tabbed-whispers-highlight');
       setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
       
-      // Only scroll if this is the active tab
-      if (TabbedChatManager._activeTab === tab) {
+      // Only scroll if this is the active tab AND scrolling isn't suppressed
+      if (TabbedChatManager._activeTab === tab && !TabbedChatManager._suppressScrolling) {
         // Use longer delay to ensure DOM is fully updated
         setTimeout(() => {
           TabbedChatManager._forceScrollToBottom($html, tab);
