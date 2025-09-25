@@ -172,39 +172,44 @@ class TabbedChatManager {
     // Insert the tabs before chat log
     $chatLog.before(tabsHTML);
     
-    // CRITICAL: Add click handlers with proper event delegation and debugging
-    console.log(`${MODULE_ID}: Adding click handlers`);
+    // FIXED: Direct click handlers (not delegation) for reliable clicking
+    console.log(`${MODULE_ID}: Adding direct click handlers`);
     
-    $html.off('click.tabchat').on('click.tabchat', '.tabchat-tab', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      const $this = $(this);
-      const tabName = $this.data('tab');
-      
-      console.log(`${MODULE_ID}: Tab clicked: ${tabName}`);
-      
-      // Update active state
-      $html.find('.tabchat-tab').removeClass('active');
-      $this.addClass('active');
-      
-      // Update current tab
-      TabbedChatManager.currentTab = tabName;
-      
-      // Update message visibility
-      TabbedChatManager._updateVisibility();
-      
-      console.log(`${MODULE_ID}: Successfully switched to ${tabName} tab`);
-    });
-
-    // Verify click handlers are attached
+    // Find tabs and attach handlers directly
     const $tabs = $html.find('.tabchat-tab');
-    console.log(`${MODULE_ID}: Attached click handlers to ${$tabs.length} tabs`);
+    console.log(`${MODULE_ID}: Found ${$tabs.length} tabs to attach handlers to`);
     
-    // Test click handler attachment
+    $tabs.each(function() {
+      const $tab = $(this);
+      const tabName = $tab.data('tab');
+      
+      console.log(`${MODULE_ID}: Attaching handler to ${tabName} tab`);
+      
+      $tab.off('click').on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        console.log(`${MODULE_ID}: ${tabName} tab clicked!`);
+        
+        // Update active state
+        $tabs.removeClass('active');
+        $tab.addClass('active');
+        
+        // Update current tab
+        TabbedChatManager.currentTab = tabName;
+        
+        // Update message visibility  
+        TabbedChatManager._updateVisibility();
+        
+        console.log(`${MODULE_ID}: Successfully switched to ${tabName} tab`);
+      });
+    });
+    
+    // Verify all handlers are attached
     $tabs.each(function(index) {
       const tabName = $(this).data('tab');
-      console.log(`${MODULE_ID}: Tab ${index}: ${tabName} - Handler attached`);
+      const hasHandler = $._data(this, 'events') && $._data(this, 'events').click;
+      console.log(`${MODULE_ID}: Tab ${tabName} - Click handler: ${hasHandler ? 'YES' : 'NO'}`);
     });
 
     console.log(`${MODULE_ID}: ✅ All features injected successfully`);
