@@ -66,17 +66,17 @@ class TabbedChatManager {
       'visibility': 'hidden'
     });
 
-    // Create tabbed interface
+    // Create tabbed interface - FIXED ORDER AND CLICKABILITY
     const tabsHTML = `
       <div class="tabchat-container">
         <nav class="tabchat-nav">
-          <a class="tabchat-tab active" data-tab="ic">WORLD</a>
-          <div class="tabchat-separator"></div>
-          <a class="tabchat-tab" data-tab="ooc">OOC</a>
-          <div class="tabchat-separator"></div>
-          <a class="tabchat-tab" data-tab="rolls">GAME</a>
-          <div class="tabchat-separator"></div>
-          <a class="tabchat-tab" data-tab="messages">MESSAGES</a>
+          <a class="tabchat-tab active" data-tab="ic" style="order: 1;">WORLD</a>
+          <div class="tabchat-separator" style="order: 2;"></div>
+          <a class="tabchat-tab" data-tab="ooc" style="order: 3;">OOC</a>
+          <div class="tabchat-separator" style="order: 4;"></div>
+          <a class="tabchat-tab" data-tab="rolls" style="order: 5;">GAME</a>
+          <div class="tabchat-separator" style="order: 6;"></div>
+          <a class="tabchat-tab" data-tab="messages" style="order: 7;">MESSAGES</a>
         </nav>
         <section class="tabchat-panel active" data-tab="ic">
           <ol class="chat-messages"></ol>
@@ -96,6 +96,7 @@ class TabbedChatManager {
           height: 100% !important;
           display: flex !important;
           flex-direction: column !important;
+          z-index: 9999 !important;
         }
         .tabchat-nav {
           display: flex !important;
@@ -103,6 +104,8 @@ class TabbedChatManager {
           background: rgba(0, 0, 0, 0.8) !important;
           border-bottom: 2px solid #444 !important;
           flex-shrink: 0 !important;
+          z-index: 10000 !important;
+          position: relative !important;
         }
         .tabchat-tab {
           flex: 1 !important;
@@ -114,6 +117,9 @@ class TabbedChatManager {
           font-weight: bold !important;
           cursor: pointer !important;
           transition: all 0.2s ease !important;
+          user-select: none !important;
+          pointer-events: auto !important;
+          position: relative !important;
         }
         .tabchat-tab:hover {
           background: rgba(255, 255, 255, 0.1) !important;
@@ -128,6 +134,7 @@ class TabbedChatManager {
           width: 2px !important;
           height: 50px !important;
           background: #666 !important;
+          flex-shrink: 0 !important;
         }
         .tabchat-panel {
           display: none !important;
@@ -150,15 +157,22 @@ class TabbedChatManager {
 
     chatContainer.after(tabsHTML);
 
-    // Cache panels and add handlers
+    // Cache panels and add handlers with debugging
     ['ic', 'ooc', 'rolls', 'messages'].forEach(tab => {
       TabbedChatManager.tabPanels[tab] = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
+      console.log(`${MODULE_ID}: Cached panel ${tab}:`, TabbedChatManager.tabPanels[tab].length > 0);
     });
 
-    $html.find('.tabchat-tab').on('click', (e) => {
+    // Add click handlers with debugging
+    $html.find('.tabchat-tab').off('click.tabchat').on('click.tabchat', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       const tabName = e.currentTarget.dataset.tab;
+      console.log(`${MODULE_ID}: Tab clicked: ${tabName}`);
       TabbedChatManager._activateTab(tabName, $html);
     });
+    
+    console.log(`${MODULE_ID}: Added click handlers to ${$html.find('.tabchat-tab').length} tabs`);
 
     console.log(`${MODULE_ID}: ✅ Tabs injected successfully`);
     return true;
@@ -333,13 +347,50 @@ class TabbedChatManager {
       }
     });
     
-    // Message handling
-    Hooks.on('preCreateChatMessage', (doc, data) => {
+    // Message handling with better /b command prevention
+    Hooks.on('preCreateChatMessage', (doc, data, options, userId) => {
       const content = data.content || '';
+      console.log(`${MODULE_ID}: preCreateChatMessage - content: "${content}"`);
+      
       if (content.startsWith('/b ')) {
+        console.log(`${MODULE_ID}: Intercepting /b command`);
         doc._tabchat_forceOOC = true;
+        
+        // Create custom OOC message and prevent original
+        const message = content.substring(3).trim();
+        const user = game.users.get(userId);
+        
+        setTimeout(() => {
+          ChatMessage.create({
+            user: userId,
+            author: userId,
+            speaker: { alias: user?.name || 'Unknown Player' },
+            content: message,
+            type: CONST.CHAT_MESSAGE_TYPES.OOC,
+            _tabchat_forceOOC: true
+          });
+        }, 50);
+        
+        return false; // This should prevent the original message
       } else if (content.match(/^\/g(ooc)? /)) {
+        console.log(`${MODULE_ID}: Intercepting global OOC command`);
         doc._tabchat_globalOOC = true;
+        
+        const match = content.match(/^\/g(ooc)? (.+)/);
+        const message = match ? match[2] : '';
+        
+        setTimeout(() => {
+          ChatMessage.create({
+            user: userId,
+            author: userId,
+            speaker: ChatMessage.getSpeaker(),
+            content: `[Global OOC] ${message}`,
+            type: CONST.CHAT_MESSAGE_TYPES.OOC,
+            _tabchat_globalOOC: true
+          });
+        }, 50);
+        
+        return false;
       }
     });
     
