@@ -1,4 +1,4 @@
-// Enhanced Tabbed Chat Module for Foundry VTT v13 - Robust Version
+// Enhanced Tabbed Chat Module for Foundry VTT v13 - Scene Instanced Version
 // 4-tab system: WORLD | OOC | GAME | MESSAGES
 
 const MODULE_ID = 'tabchat';
@@ -6,13 +6,14 @@ const MODULE_ID = 'tabchat';
 class TabbedChatManager {
   static tabPanels = {};
   static sceneMessages = {}; // Store messages per scene per tab
+  static globalOOCMessages = []; // Global OOC messages (non-scene specific)
   static _activeTab = 'ic';
   static _currentScene = null;
   static _initialized = false;
   static _chatInjected = false;
 
   static init() {
-    console.log(`${MODULE_ID} | ROBUST VERSION - Init called`);
+    console.log(`${MODULE_ID} | SCENE INSTANCED VERSION - Init called`);
     
     // Initialize scene messages structure
     TabbedChatManager._currentScene = canvas?.scene?.id || 'default';
@@ -51,7 +52,7 @@ class TabbedChatManager {
       return;
     }
     TabbedChatManager._initialized = true;
-    console.log(`${MODULE_ID} | ROBUST VERSION - Ready called`);
+    console.log(`${MODULE_ID} | SCENE INSTANCED VERSION - Ready called`);
     
     // More defensive ui.chat patching
     try {
@@ -144,7 +145,7 @@ class TabbedChatManager {
   }
 
   static setupHooks() {
-    console.log(`${MODULE_ID} | ROBUST VERSION - Setting up hooks`);
+    console.log(`${MODULE_ID} | SCENE INSTANCED VERSION - Setting up hooks`);
     
     // Multiple hooks to catch chat rendering
     Hooks.on('renderChatLog', async (app, html, data) => {
@@ -175,11 +176,17 @@ class TabbedChatManager {
     });
     
     Hooks.on('preCreateChatMessage', (doc, data, options, userId) => {
-      // Handle /b command preprocessing
-      if (data.content && data.content.startsWith('/b ')) {
-        // Force the message to be treated as OOC
-        doc._tabchat_forceOOC = true;
-        console.log(`${MODULE_ID}: /b command detected, forcing OOC tab`);
+      // Handle special commands
+      if (data.content) {
+        if (data.content.startsWith('/b ')) {
+          // Force /b messages to OOC tab with username
+          doc._tabchat_forceOOC = true;
+          console.log(`${MODULE_ID}: /b command detected, forcing OOC tab`);
+        } else if (data.content.startsWith('/g ') || data.content.startsWith('/gooc ')) {
+          // Force global OOC messages
+          doc._tabchat_globalOOC = true;
+          console.log(`${MODULE_ID}: Global OOC command detected`);
+        }
       }
     });
     
@@ -254,7 +261,7 @@ class TabbedChatManager {
     if (!TabbedChatManager.sceneMessages[sceneId]) {
       TabbedChatManager.sceneMessages[sceneId] = {
         ic: [],
-        ooc: [],
+        ooc: [],  // OOC is now scene-specific too
         rolls: []
         // messages (whisper) is global, not per-scene
       };
@@ -267,14 +274,14 @@ class TabbedChatManager {
     
     TabbedChatManager._initializeSceneMessages(sceneId);
     
-    // Clear current display for scene-specific tabs
+    // Clear current display for scene-specific tabs (IC, OOC, ROLLS)
     ['ic', 'ooc', 'rolls'].forEach(tab => {
       if (TabbedChatManager.tabPanels[tab]) {
         TabbedChatManager.tabPanels[tab].empty();
       }
     });
     
-    // Restore messages for new scene
+    // Restore scene-specific messages
     ['ic', 'ooc', 'rolls'].forEach(tab => {
       const messages = TabbedChatManager.sceneMessages[sceneId][tab] || [];
       messages.forEach(msgHtml => {
@@ -282,6 +289,13 @@ class TabbedChatManager {
           TabbedChatManager.tabPanels[tab].append(msgHtml.clone());
         }
       });
+    });
+    
+    // Add global OOC messages to OOC tab
+    TabbedChatManager.globalOOCMessages.forEach(msgHtml => {
+      if (TabbedChatManager.tabPanels.ooc) {
+        TabbedChatManager.tabPanels.ooc.append(msgHtml.clone());
+      }
     });
     
     // Messages (whisper) tab remains unchanged as it's global
@@ -332,7 +346,7 @@ class TabbedChatManager {
         'visibility': 'hidden'
       });
       
-      // Create tabs HTML
+      // Create tabs HTML - CORRECT ORDER: WORLD | OOC | GAME | MESSAGES
       const tabs = [
         { id: 'ic', label: 'WORLD' },
         { id: 'ooc', label: 'OOC' },
@@ -358,7 +372,7 @@ class TabbedChatManager {
         TabbedChatManager._activateTab(tabName, $html);
       });
       
-      console.log(`${MODULE_ID}: ✅ Successfully injected tabbed interface`);
+      console.log(`${MODULE_ID}: ✅ Successfully injected tabbed interface with correct order: WORLD | OOC | GAME | MESSAGES`);
       return true;
       
     } catch (err) {
@@ -401,17 +415,18 @@ class TabbedChatManager {
         }
         .tabchat-tab {
           flex: 1;
-          padding: 12px 8px;
+          padding: 16px 8px;
           text-align: center;
           background: rgba(0, 0, 0, 0.5);
           color: #ccc;
           text-decoration: none;
-          font-size: 16px;
+          font-size: 18px;
           font-weight: bold;
           border: none;
           cursor: pointer;
           transition: all 0.2s ease;
           user-select: none;
+          line-height: 1.2;
         }
         .tabchat-tab:hover {
           background: rgba(255, 255, 255, 0.1);
@@ -424,7 +439,7 @@ class TabbedChatManager {
         }
         .tabchat-separator {
           width: 2px;
-          height: 40px;
+          height: 50px;
           background: #666;
           margin: 0;
           flex-shrink: 0;
@@ -452,6 +467,20 @@ class TabbedChatManager {
         @keyframes messageHighlight {
           0% { background-color: rgba(76, 175, 80, 0.3); }
           100% { background-color: transparent; }
+        }
+        
+        /* WORLD chat special formatting */
+        .tabchat-panel[data-tab="ic"] .message-content {
+          /* Regular speech gets quotes */
+        }
+        .tabchat-panel[data-tab="ic"] .tabchat-me-action {
+          color: #827896 !important;
+          font-style: italic;
+        }
+        .tabchat-global-ooc {
+          background-color: rgba(255, 165, 0, 0.1);
+          border-left: 3px solid orange;
+          padding-left: 8px;
         }
       </style>
     `;
@@ -503,21 +532,13 @@ class TabbedChatManager {
     console.log(`${MODULE_ID}: ✅ RENDERING message to ${tab} tab`);
     
     if (tab && TabbedChatManager.tabPanels[tab]?.length) {
-      // Process /b command - remove /b and add OOC prefix
-      if (message.content?.startsWith('/b ')) {
-        msgHtml.find('.message-content').each(function() {
-          const content = $(this).html();
-          $(this).html(content.replace('/b ', '[OOC] '));
-        });
-      }
+      // Apply special formatting based on message type and tab
+      TabbedChatManager._formatMessage(message, msgHtml, tab);
       
       TabbedChatManager.tabPanels[tab].append(msgHtml);
       
-      // Store message in appropriate scene (except for messages tab which is global)
-      if (tab !== 'messages') {
-        TabbedChatManager._initializeSceneMessages(messageScene);
-        TabbedChatManager.sceneMessages[messageScene][tab].push(msgHtml.clone());
-      }
+      // Store message appropriately
+      TabbedChatManager._storeMessage(message, msgHtml, tab, messageScene);
       
       // Add highlight effect
       msgHtml.addClass('tabbed-messages-highlight');
@@ -534,7 +555,89 @@ class TabbedChatManager {
     }
   }
 
+  static _formatMessage(message, msgHtml, tab) {
+    const content = message.content || '';
+    
+    // Handle Global OOC messages
+    if (message._tabchat_globalOOC) {
+      let prefix = '[Global OOC] ';
+      if (content.startsWith('/g ')) {
+        msgHtml.find('.message-content').each(function() {
+          const content = $(this).html();
+          $(this).html(content.replace('/g ', prefix));
+        });
+      } else if (content.startsWith('/gooc ')) {
+        msgHtml.find('.message-content').each(function() {
+          const content = $(this).html();
+          $(this).html(content.replace('/gooc ', prefix));
+        });
+      }
+      msgHtml.addClass('tabchat-global-ooc');
+      return;
+    }
+    
+    // Handle /b command - use player username instead of actor name
+    if (message._tabchat_forceOOC || content.startsWith('/b ')) {
+      const username = game.users.get(message.author?.id || message.author)?.name || 'Unknown Player';
+      msgHtml.find('.message-content').each(function() {
+        const content = $(this).html();
+        $(this).html(content.replace('/b ', ''));
+      });
+      // Update speaker info to show username instead of actor
+      msgHtml.find('.message-sender-name').text(username);
+      return;
+    }
+    
+    // WORLD chat special formatting
+    if (tab === 'ic') {
+      // Handle /me commands
+      if (content.startsWith('/me ')) {
+        msgHtml.find('.message-content').each(function() {
+          const content = $(this).html();
+          $(this).html(content.replace('/me ', '')).addClass('tabchat-me-action');
+        });
+      } else if (!content.startsWith('/')) {
+        // Regular speech gets quotes automatically
+        msgHtml.find('.message-content').each(function() {
+          const currentContent = $(this).html();
+          // Only add quotes if not already quoted and not empty
+          if (currentContent.trim() && !currentContent.trim().startsWith('"') && !currentContent.trim().startsWith('<')) {
+            $(this).html(`"${currentContent}"`);
+          }
+        });
+      }
+      
+      // Use Represented Actor name instead of Token Name for WORLD chat
+      const speaker = message.speaker;
+      if (speaker?.actor) {
+        const actor = game.actors.get(speaker.actor);
+        if (actor) {
+          msgHtml.find('.message-sender-name').text(actor.name);
+        }
+      }
+    }
+  }
+
+  static _storeMessage(message, msgHtml, tab, messageScene) {
+    if (tab === 'messages') {
+      // Messages tab is global - don't store per scene
+      return;
+    } else if (message._tabchat_globalOOC) {
+      // Global OOC messages go to all scenes
+      TabbedChatManager.globalOOCMessages.push(msgHtml.clone());
+    } else {
+      // Scene-specific messages (IC, OOC, ROLLS)
+      TabbedChatManager._initializeSceneMessages(messageScene);
+      TabbedChatManager.sceneMessages[messageScene][tab].push(msgHtml.clone());
+    }
+  }
+
   static _getMessageTab(message) {
+    // Handle Global OOC commands first
+    if (message._tabchat_globalOOC || message.content?.startsWith('/g ') || message.content?.startsWith('/gooc ')) {
+      return 'ooc';
+    }
+    
     // Handle /b command override
     if (message._tabchat_forceOOC || message.content?.startsWith('/b ')) {
       return 'ooc';
@@ -572,7 +675,12 @@ class TabbedChatManager {
         return isAuthor || isTarget;
       }
     } else if (tab === 'ic' || tab === 'ooc' || tab === 'rolls') {
-      // WORLD/OOC/GAME: Show if same scene OR if user is author
+      // Global OOC messages are visible to everyone regardless of scene
+      if (message._tabchat_globalOOC) {
+        return true;
+      }
+      
+      // Scene-specific messages: Show if same scene OR if user is author
       const isSameScene = (messageScene === currentScene);
       const isAuthor = (messageAuthor === currentUserId);
       return isSameScene || isAuthor;
@@ -588,23 +696,40 @@ class TabbedChatManager {
     if (tab && TabbedChatManager.tabPanels[tab]?.length) {
       const existing = TabbedChatManager.tabPanels[tab].find(`[data-message-id="${message.id}"]`);
       if (existing.length) {
+        // Apply formatting to updated message
+        TabbedChatManager._formatMessage(message, msgHtml, tab);
         existing.replaceWith(msgHtml);
         
-        // Update stored message for scene instancing (except messages tab)
-        if (tab !== 'messages') {
-          TabbedChatManager._initializeSceneMessages(messageScene);
-          const storedMessages = TabbedChatManager.sceneMessages[messageScene][tab];
-          const msgIndex = storedMessages.findIndex(msg => 
-            msg.find(`[data-message-id="${message.id}"]`).length > 0
-          );
-          if (msgIndex !== -1) {
-            storedMessages[msgIndex] = msgHtml.clone();
-          }
-        }
+        // Update stored message
+        TabbedChatManager._updateStoredMessage(message, msgHtml, tab, messageScene);
         
         if (TabbedChatManager._activeTab === tab) {
           TabbedChatManager._scrollToLastMessage($html, tab);
         }
+      }
+    }
+  }
+
+  static _updateStoredMessage(message, msgHtml, tab, messageScene) {
+    if (tab === 'messages') {
+      return; // Messages are global, no need to update stored messages
+    } else if (message._tabchat_globalOOC) {
+      // Update global OOC message
+      const msgIndex = TabbedChatManager.globalOOCMessages.findIndex(msg => 
+        msg.find(`[data-message-id="${message.id}"]`).length > 0
+      );
+      if (msgIndex !== -1) {
+        TabbedChatManager.globalOOCMessages[msgIndex] = msgHtml.clone();
+      }
+    } else {
+      // Update scene-specific message
+      TabbedChatManager._initializeSceneMessages(messageScene);
+      const storedMessages = TabbedChatManager.sceneMessages[messageScene][tab];
+      const msgIndex = storedMessages.findIndex(msg => 
+        msg.find(`[data-message-id="${message.id}"]`).length > 0
+      );
+      if (msgIndex !== -1) {
+        storedMessages[msgIndex] = msgHtml.clone();
       }
     }
   }
@@ -614,8 +739,14 @@ class TabbedChatManager {
       // Remove from display
       TabbedChatManager.tabPanels[tab]?.find(`[data-message-id="${messageId}"]`).remove();
       
-      // Remove from stored messages (except messages tab)
+      // Remove from stored messages
       if (tab !== 'messages') {
+        // Remove from global OOC
+        TabbedChatManager.globalOOCMessages = TabbedChatManager.globalOOCMessages.filter(msg => 
+          msg.find(`[data-message-id="${messageId}"]`).length === 0
+        );
+        
+        // Remove from scene messages
         Object.keys(TabbedChatManager.sceneMessages).forEach(sceneId => {
           const sceneMessages = TabbedChatManager.sceneMessages[sceneId][tab];
           if (sceneMessages) {
@@ -674,4 +805,4 @@ Hooks.once('ready', () => {
 // Setup hooks after everything is defined
 TabbedChatManager.setupHooks();
 
-console.log(`${MODULE_ID}: Module script loaded`);
+console.log(`${MODULE_ID}: Scene Instanced Module script loaded`);
