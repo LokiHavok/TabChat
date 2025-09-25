@@ -1,68 +1,113 @@
-/* TabChat CSS - Fixes scrollbar issues */
+/* TabChat CSS - Complete styling with green theme */
 
 .tabchat-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  position: relative !important;
+  z-index: 100 !important;
+  background: transparent !important;
+  overflow: hidden;
   width: 100%;
-  overflow: hidden; /* Prevent container from creating its own scrollbar */
 }
 
 .tabchat-nav {
-  display: flex;
-  flex-shrink: 0; /* Don't allow nav to shrink */
-  border-bottom: 1px solid #666;
-  background: rgba(0, 0, 0, 0.8);
-  padding: 0;
-  margin: 0;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-shrink: 0 !important;
+  background: #1a1a1a !important;
+  border-bottom: 2px solid #215112 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: 40px !important;
 }
 
 .tabchat-tab {
-  flex: 1;
-  padding: 8px 12px;
-  text-align: center;
-  background: rgba(0, 0, 0, 0.3);
-  color: #ccc;
+  flex: 1 !important;
+  padding: 12px 8px !important;
+  cursor: pointer !important;
+  background: #2a2a2a !important;
+  color: #999 !important;
+  border-right: 1px solid #444 !important;
+  user-select: none !important;
+  transition: all 0.2s ease !important;
+  font-weight: bold !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  text-align: center !important;
+  letter-spacing: 0.5px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
   border: none;
-  border-right: 1px solid #666;
-  cursor: pointer;
-  transition: background-color 0.2s;
   text-decoration: none;
-  font-size: 12px;
-  font-weight: bold;
+}
+
+.tabchat-tab:last-child {
+  border-right: none !important;
 }
 
 .tabchat-tab:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: #3a3a3a !important;
+  color: #ccc !important;
 }
 
 .tabchat-tab.active {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: #215112 !important;
+  color: #fff !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.3) !important;
 }
 
 .tabchat-panel {
-  flex: 1; /* Take up remaining height */
-  display: none;
-  overflow: hidden; /* Let the inner ol handle scrolling */
-  position: relative;
+  flex: 1 !important;
+  display: none !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  background: transparent !important;
+  position: relative !important;
+  height: 100% !important;
 }
 
 .tabchat-panel.active {
-  display: flex;
-  flex-direction: column;
+  display: flex !important;
 }
 
 .tabchat-panel ol.chat-messages {
-  flex: 1; /* Take up all available height in the panel */
-  overflow-y: auto; /* Only this element should scroll */
-  overflow-x: hidden;
-  height: 100%; /* Ensure it takes full height */
-  max-height: none; /* Override any max-height restrictions */
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  flex: 1 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 8px !important;
+  margin: 0 !important;
+  list-style: none !important;
+  background: transparent !important;
+  height: 100% !important;
+  max-height: none !important;
+}
+
+.tabchat-highlight {
+  animation: tabchat-glow 2s ease-out !important;
+}
+
+@keyframes tabchat-glow {
+  0% { 
+    background-color: rgba(33, 81, 18, 0.4) !important;
+    box-shadow: 0 0 8px rgba(33, 81, 18, 0.5) !important;
+  }
+  100% { 
+    background-color: transparent !important;
+    box-shadow: none !important;
+  }
+}
+
+.scene-indicator {
+  position: absolute;
+  top: 2px;
+  right: 5px;
+  font-size: 8px;
+  color: #215112;
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 /* Hide any duplicate scrollbars from parent containers */
@@ -90,15 +135,15 @@
   background: rgba(0, 0, 0, 0.1);
 }
 
-/* Highlight effect for new messages */
+/* Highlight effect for new messages - using your original naming */
 .tabbed-whispers-highlight {
   animation: messageHighlight 2.5s ease-out;
 }
 
 @keyframes messageHighlight {
   0% { 
-    background-color: rgba(255, 255, 0, 0.3);
-    box-shadow: 0 0 8px rgba(255, 255, 0, 0.5);
+    background-color: rgba(33, 81, 18, 0.4);
+    box-shadow: 0 0 8px rgba(33, 81, 18, 0.5);
   }
   100% { 
     background-color: transparent;
