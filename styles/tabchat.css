@@ -1,121 +1,78 @@
-/* Tabbed Chat Module Styles - v25 */
-
-/* HIGH PRIORITY STYLES - Override Carolingian UI and other modules */
+/* Tabbed Chat Module CSS - Extracted from v0 */
+/* Main container for the entire tabbed chat interface */
 .tabchat-container {
   height: 100% !important;
   display: flex !important;
   flex-direction: column !important;
   z-index: 9999 !important;
-  position: relative !important;
 }
 
+/* Navigation bar containing all tabs */
 .tabchat-nav {
   display: flex !important;
   align-items: center !important;
   background: rgba(0, 0, 0, 0.8) !important;
   border-bottom: 2px solid #444 !important;
-  padding: 0 !important;
-  margin: 0 !important;
   flex-shrink: 0 !important;
   z-index: 10000 !important;
-  /* Tab order: WORLD | OOC | GAME | MESSAGES */
-  flex-direction: row !important;
+  position: relative !important;
 }
 
+/* Individual tab styling */
 .tabchat-tab {
   flex: 1 !important;
   padding: 16px 8px !important;
   text-align: center !important;
   background: rgba(0, 0, 0, 0.5) !important;
   color: #ccc !important;
-  text-decoration: none !important;
   font-size: 18px !important;
   font-weight: bold !important;
-  border: none !important;
   cursor: pointer !important;
   transition: all 0.2s ease !important;
   user-select: none !important;
-  line-height: 1.2 !important;
-  min-height: 50px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  /* Ensure proper tab order */
-  order: initial !important;
+  pointer-events: auto !important;
+  position: relative !important;
 }
 
-/* Specific tab ordering to ensure WORLD | OOC | GAME | MESSAGES */
-.tabchat-tab[data-tab="ic"] { order: 1 !important; }      /* WORLD first */
-.tabchat-tab[data-tab="ooc"] { order: 2 !important; }     /* OOC second */
-.tabchat-tab[data-tab="rolls"] { order: 3 !important; }   /* GAME third */
-.tabchat-tab[data-tab="messages"] { order: 4 !important; } /* MESSAGES fourth */
-
+/* Tab hover effects */
 .tabchat-tab:hover {
   background: rgba(255, 255, 255, 0.1) !important;
   color: #fff !important;
 }
 
+/* Active tab styling */
 .tabchat-tab.active {
   background: rgba(255, 255, 255, 0.15) !important;
   color: #fff !important;
-  border-bottom: 4px solid #4CAF50 !important;
+  border-bottom: 3px solid #4CAF50 !important;
 }
 
+/* Visual separators between tabs */
 .tabchat-separator {
   width: 2px !important;
   height: 50px !important;
   background: #666 !important;
-  margin: 0 !important;
   flex-shrink: 0 !important;
-  /* Separator ordering */
-  order: initial !important;
 }
 
-/* Separator specific ordering */
-.tabchat-separator:nth-of-type(2) { order: 1.5 !important; } /* Between WORLD and OOC */
-.tabchat-separator:nth-of-type(3) { order: 2.5 !important; } /* Between OOC and GAME */
-.tabchat-separator:nth-of-type(4) { order: 3.5 !important; } /* Between GAME and MESSAGES */
-
+/* Chat panel containers */
 .tabchat-panel {
   display: none !important;
   flex: 1 !important;
   overflow: hidden !important;
-  height: 100% !important;
 }
 
+/* Active panel styling */
 .tabchat-panel.active {
   display: flex !important;
   flex-direction: column !important;
 }
 
+/* Chat messages list within each panel */
 .tabchat-panel ol.chat-messages {
   flex: 1 !important;
   overflow-y: auto !important;
-  overflow-x: hidden !important;
   margin: 0 !important;
   padding: 0 !important;
   list-style: none !important;
-  height: 100% !important;
-  max-height: none !important;
-}
-
-/* Message highlighting animation */
-.tabbed-messages-highlight {
-  animation: messageHighlight 2.5s ease-out !important;
-}
-
-@keyframes messageHighlight {
-  0% { 
-    background-color: rgba(76, 175, 80, 0.3) !important; 
-  }
-  100% { 
-    background-color: transparent !important; 
-  }
-}
-
-/* Global OOC message styling */
-.tabchat-global-ooc {
-  background-color: rgba(255, 165, 0, 0.1) !important;
-  border-left: 3px solid orange !important;
-  padding-left: 8px !important;
 }
