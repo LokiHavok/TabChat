@@ -9,7 +9,7 @@
   },
   "scripts": [
     "scripts/tabchat.js",
-    "scripts/commands.js",
+    "scripts/commands.js"],
   "styles": ["styles/tabchat.css"],
   "packs": [],
   "authors": [
