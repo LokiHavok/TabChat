@@ -44,7 +44,7 @@ class TabbedChatManager {
       console.warn(`${MODULE_ID} | Failed to store ui.chat._postOne`, err);
     }
     
-    // Render existing messages after tabs are set up
+    // Render existing messages after tabs are set up - longer delay for module compatibility
     setTimeout(() => {
       try {
         if (!ui.chat?.element || !TabbedChatManager._hasInjectedTabs) {
@@ -61,14 +61,18 @@ class TabbedChatManager {
       } catch (err) {
         console.error(`${MODULE_ID} | Error rendering existing messages`, err);
       }
-    }, 2000);
+    }, 3000); // Increased delay for better module compatibility
   }
 
   static setupHooks() {
     console.log(`${MODULE_ID} | V13 COMPATIBLE - Setting up hooks`);
     
+    // Wait for other modules to finish before injecting our tabs
     Hooks.on('renderChatLog', async (app, html, data) => {
-      await TabbedChatManager.injectTabs(app, html, data);
+      // Add extra delay to ensure other modules are done
+      setTimeout(async () => {
+        await TabbedChatManager.injectTabs(app, html, data);
+      }, 500);
     });
     
     // Handle /b commands in chat input
@@ -139,6 +143,9 @@ class TabbedChatManager {
     const $html = $(html);
     console.log(`${MODULE_ID}: V13 COMPATIBLE - Injecting tabs`);
 
+    // Wait longer for other modules to finish their DOM manipulation
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
     let defaultOl = $html.find('ol.chat-messages');
     if (!defaultOl.length) {
       defaultOl = $html.find('.chat-messages-container ol');
@@ -161,10 +168,10 @@ class TabbedChatManager {
       TabbedChatManager._replaceMessageList(defaultOl, $html);
       TabbedChatManager._hasInjectedTabs = true;
       
-      // Apply rendering suppression AFTER tabs are injected
+      // Apply rendering suppression AFTER tabs are injected and other modules are ready
       setTimeout(() => {
         TabbedChatManager._applyRenderingPatches();
-      }, 500);
+      }, 1500);
     } catch (err) {
       console.error(`${MODULE_ID}: Error injecting tabs:`, err);
     }
@@ -235,13 +242,17 @@ class TabbedChatManager {
   }
 
   static _replaceMessageList(defaultOl, $html) {
-    // Hide the original ol completely
+    // Keep the original ol visible but move it out of the way
+    // This prevents other modules from breaking when looking for it
     defaultOl.css({
-      'display': 'none !important',
-      'height': '0 !important', 
-      'overflow': 'hidden !important',
       'position': 'absolute',
-      'visibility': 'hidden'
+      'top': '-9999px',
+      'left': '-9999px',
+      'width': '1px',
+      'height': '1px',
+      'opacity': '0',
+      'pointer-events': 'none',
+      'overflow': 'hidden'
     });
     
     // Create CSS for better tab styling - avoid conflicts with other modules
@@ -342,10 +353,18 @@ class TabbedChatManager {
       </div>
     `;
     
-    // Use safer DOM insertion to avoid conflicts
+    // Use safer DOM insertion that doesn't conflict with other modules
     try {
-      defaultOl.after(tabHtml);
-      console.log(`${MODULE_ID}: V13 COMPATIBLE - Added tabbed interface`);
+      // Find the chat container and insert our tabs as the last child
+      const chatContainer = defaultOl.parent();
+      if (chatContainer && chatContainer.length) {
+        chatContainer.append(tabHtml);
+        console.log(`${MODULE_ID}: V13 COMPATIBLE - Added tabbed interface to container`);
+      } else {
+        // Fallback to the original method
+        defaultOl.after(tabHtml);
+        console.log(`${MODULE_ID}: V13 COMPATIBLE - Added tabbed interface after OL`);
+      }
     } catch (err) {
       console.error(`${MODULE_ID}: Error inserting tab HTML:`, err);
       return;
@@ -580,9 +599,14 @@ class TabbedChatManager {
   }
 }
 
-// Module Initialization
+// Module Initialization - Use later hooks for better compatibility
 Hooks.once('init', TabbedChatManager.init);
 Hooks.once('ready', TabbedChatManager.ready);
 
-// Setup hooks
-TabbedChatManager.setupHooks();
+// Setup hooks after everything else is ready
+Hooks.once('canvasReady', () => {
+  // Even later initialization to ensure all other modules are done
+  setTimeout(() => {
+    TabbedChatManager.setupHooks();
+  }, 1000);
+});
