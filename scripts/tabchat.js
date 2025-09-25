@@ -247,10 +247,10 @@ class TabbedChatManager {
     const tabHtml = `
       <div class="tabchat-container" style="height: 100%; display: flex; flex-direction: column;">
         <nav class="tabchat-nav" style="display: flex; flex-direction: row; flex-shrink: 0; height: auto;">
-          <a class="tabchat-tab active" data-tab="ic" style="order: 1; padding: 8px 12px; cursor: pointer;">WORLD</a>
-          <a class="tabchat-tab" data-tab="ooc" style="order: 2; padding: 8px 12px; cursor: pointer;">OOC</a>
-          <a class="tabchat-tab" data-tab="rolls" style="order: 3; padding: 8px 12px; cursor: pointer;">GAME</a>
-          <a class="tabchat-tab" data-tab="whisper" style="order: 4; padding: 8px 12px; cursor: pointer;">MESSAGES</a>
+          <a class="tabchat-tab active" data-tab="ic" style="padding: 8px 12px; cursor: pointer;">WORLD</a>
+          <a class="tabchat-tab" data-tab="ooc" style="padding: 8px 12px; cursor: pointer;">OOC</a>
+          <a class="tabchat-tab" data-tab="rolls" style="padding: 8px 12px; cursor: pointer;">GAME</a>
+          <a class="tabchat-tab" data-tab="whisper" style="padding: 8px 12px; cursor: pointer;">MESSAGES</a>
         </nav>
         <section class="tabchat-panel active" data-tab="ic" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
           <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 0; margin: 0; list-style: none;"></ol>
@@ -269,7 +269,7 @@ class TabbedChatManager {
     
     // Insert tabbed interface AFTER the original ol
     defaultOl.after(tabHtml);
-    console.log(`${MODULE_ID}: CORE - Added tabbed interface with correct order: WORLD | OOC | GAME | MESSAGES`);
+    console.log(`${MODULE_ID}: CORE - Added tabbed interface in order: WORLD | OOC | GAME | MESSAGES`);
 
     // Cache tab panels
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
