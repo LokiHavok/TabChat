@@ -1,15 +1,21 @@
-// Tabbed Chat Module for Foundry VTT v13 - Core Features Only
-// Simple 4-tab system: WORLD | OOC | ROLLS | WHISPER
+// Enhanced Tabbed Chat Module for Foundry VTT v13 - With Scene Instancing
+// 4-tab system: WORLD | OOC | GAME | MESSAGES
 
 const MODULE_ID = 'tabchat';
 
 class TabbedChatManager {
   static tabPanels = {};
+  static sceneMessages = {}; // Store messages per scene per tab
   static _activeTab = 'ic';
+  static _currentScene = null;
   static _initialized = false;
 
   static init() {
-    console.log(`${MODULE_ID} | CORE VERSION - Init called`);
+    console.log(`${MODULE_ID} | ENHANCED VERSION - Init called`);
+    
+    // Initialize scene messages structure
+    TabbedChatManager._currentScene = canvas?.scene?.id || 'default';
+    TabbedChatManager._initializeSceneMessages(TabbedChatManager._currentScene);
     
     // Use the new v13 namespace
     try {
@@ -44,7 +50,7 @@ class TabbedChatManager {
       return;
     }
     TabbedChatManager._initialized = true;
-    console.log(`${MODULE_ID} | CORE VERSION - Ready called`);
+    console.log(`${MODULE_ID} | ENHANCED VERSION - Ready called`);
     
     // Patch ui.chat instance
     try {
@@ -85,6 +91,9 @@ class TabbedChatManager {
           TabbedChatManager.renderMessage(message, $html);
         }
         console.log(`${MODULE_ID}: Finished loading existing messages`);
+        
+        // Switch to current scene's messages
+        TabbedChatManager._switchToScene(TabbedChatManager._currentScene, $html);
       } catch (err) {
         console.error(`${MODULE_ID} | Error rendering existing messages`, err);
       }
@@ -92,14 +101,34 @@ class TabbedChatManager {
   }
 
   static setupHooks() {
-    console.log(`${MODULE_ID} | CORE VERSION - Setting up hooks`);
+    console.log(`${MODULE_ID} | ENHANCED VERSION - Setting up hooks`);
     
     Hooks.on('renderChatLog', async (app, html, data) => {
       await TabbedChatManager.injectTabs(app, html, data);
     });
     
+    // Scene change hook for chat instancing
+    Hooks.on('canvasReady', (canvas) => {
+      const newSceneId = canvas.scene?.id;
+      if (newSceneId && newSceneId !== TabbedChatManager._currentScene) {
+        console.log(`${MODULE_ID}: Scene changed from ${TabbedChatManager._currentScene} to ${newSceneId}`);
+        TabbedChatManager._currentScene = newSceneId;
+        TabbedChatManager._initializeSceneMessages(newSceneId);
+        
+        // Switch chat to new scene
+        if (ui.chat?.element) {
+          TabbedChatManager._switchToScene(newSceneId, $(ui.chat.element));
+        }
+      }
+    });
+    
     Hooks.on('preCreateChatMessage', (doc, data, options, userId) => {
-      console.log(`${MODULE_ID}: preCreateChatMessage`, { id: doc?.id, content: data?.content });
+      // Handle /b command preprocessing
+      if (data.content && data.content.startsWith('/b ')) {
+        // Force the message to be treated as OOC
+        doc._tabchat_forceOOC = true;
+        console.log(`${MODULE_ID}: /b command detected, forcing OOC tab`);
+      }
     });
     
     // Suppress Foundry's default render when tabbed UI is active
@@ -138,6 +167,49 @@ class TabbedChatManager {
     });
   }
 
+  // Scene Messages Management
+  static _initializeSceneMessages(sceneId) {
+    if (!TabbedChatManager.sceneMessages[sceneId]) {
+      TabbedChatManager.sceneMessages[sceneId] = {
+        ic: [],
+        ooc: [],
+        rolls: []
+        // messages (whisper) is global, not per-scene
+      };
+      console.log(`${MODULE_ID}: Initialized message storage for scene ${sceneId}`);
+    }
+  }
+
+  static _switchToScene(sceneId, $html) {
+    TabbedChatManager._initializeSceneMessages(sceneId);
+    
+    // Clear current display for scene-specific tabs
+    ['ic', 'ooc', 'rolls'].forEach(tab => {
+      if (TabbedChatManager.tabPanels[tab]) {
+        TabbedChatManager.tabPanels[tab].empty();
+      }
+    });
+    
+    // Restore messages for new scene
+    ['ic', 'ooc', 'rolls'].forEach(tab => {
+      const messages = TabbedChatManager.sceneMessages[sceneId][tab] || [];
+      messages.forEach(msgHtml => {
+        if (TabbedChatManager.tabPanels[tab]) {
+          TabbedChatManager.tabPanels[tab].append(msgHtml.clone());
+        }
+      });
+    });
+    
+    // Messages (whisper) tab remains unchanged as it's global
+    
+    // Scroll to bottom of active tab
+    setTimeout(() => {
+      TabbedChatManager._scrollToLastMessage($html, TabbedChatManager._activeTab);
+    }, 100);
+    
+    console.log(`${MODULE_ID}: Switched to scene ${sceneId} chat instance`);
+  }
+
   // Core Methods
   static async injectTabs(app, html, data) {
     if (!(html instanceof HTMLElement)) {
@@ -146,7 +218,7 @@ class TabbedChatManager {
     }
 
     const $html = $(html);
-    console.log(`${MODULE_ID}: CORE - Injecting tabs`);
+    console.log(`${MODULE_ID}: ENHANCED - Injecting tabs`);
 
     let defaultOl = $html.find('ol.chat-messages');
     if (!defaultOl.length) {
@@ -198,21 +270,22 @@ class TabbedChatManager {
       'visibility': 'hidden'
     });
     
-    // CORRECT tab order: WORLD, OOC, GAME, WHISPER
+    // CORRECT tab order: WORLD, OOC, GAME, MESSAGES
     const tabs = [
       { id: 'ic', label: 'WORLD' },
       { id: 'ooc', label: 'OOC' },
       { id: 'rolls', label: 'GAME' },
-      { id: 'whisper', label: 'WHISPER' }
+      { id: 'messages', label: 'MESSAGES' }
     ];
     
     const tabHtml = `
       <div class="tabchat-container">
         <nav class="tabchat-nav">
-          ${tabs.map((tab) => `
+          ${tabs.map((tab, index) => `
             <a class="tabchat-tab ${tab.id === 'ic' ? 'active' : ''}" data-tab="${tab.id}">
               ${tab.label}
             </a>
+            ${index < tabs.length - 1 ? '<div class="tabchat-separator"></div>' : ''}
           `).join('')}
         </nav>
         ${tabs.map((tab) => `
@@ -221,14 +294,77 @@ class TabbedChatManager {
           </section>
         `).join('')}
       </div>
+      <style>
+        .tabchat-nav {
+          display: flex;
+          align-items: center;
+          background: rgba(0, 0, 0, 0.8);
+          border-bottom: 2px solid #444;
+          padding: 0;
+          margin: 0;
+        }
+        .tabchat-tab {
+          flex: 1;
+          padding: 12px 8px;
+          text-align: center;
+          background: rgba(0, 0, 0, 0.5);
+          color: #ccc;
+          text-decoration: none;
+          font-size: 16px;
+          font-weight: bold;
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .tabchat-tab:hover {
+          background: rgba(255, 255, 255, 0.1);
+          color: #fff;
+        }
+        .tabchat-tab.active {
+          background: rgba(255, 255, 255, 0.15);
+          color: #fff;
+          border-bottom: 3px solid #4CAF50;
+        }
+        .tabchat-separator {
+          width: 2px;
+          height: 40px;
+          background: #666;
+          margin: 0;
+        }
+        .tabchat-panel {
+          display: none;
+          height: 100%;
+        }
+        .tabchat-panel.active {
+          display: block;
+        }
+        .tabchat-panel ol.chat-messages {
+          height: 100%;
+          overflow-y: auto;
+          margin: 0;
+          padding: 0;
+        }
+        .tabchat-container {
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+        }
+        .tabbed-messages-highlight {
+          animation: messageHighlight 2.5s ease-out;
+        }
+        @keyframes messageHighlight {
+          0% { background-color: rgba(76, 175, 80, 0.3); }
+          100% { background-color: transparent; }
+        }
+      </style>
     `;
     
     // Insert tabbed interface AFTER the original ol
     defaultOl.after(tabHtml);
-    console.log(`${MODULE_ID}: CORE - Added tabbed interface with correct order: WORLD | OOC | ROLLS | WHISPER`);
+    console.log(`${MODULE_ID}: ENHANCED - Added tabbed interface with order: WORLD | OOC | GAME | MESSAGES`);
 
-    // Cache tab panels
-    ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
+    // Cache tab panels (updated to use 'messages' instead of 'whisper')
+    ['ic', 'ooc', 'rolls', 'messages'].forEach((tab) => {
       const panel = $html.find(`.tabchat-panel[data-tab="${tab}"] ol.chat-messages`);
       TabbedChatManager.tabPanels[tab] = panel;
       console.log(`${MODULE_ID}: Cached panel for ${tab}`, { exists: panel.length > 0 });
@@ -240,8 +376,7 @@ class TabbedChatManager {
       TabbedChatManager._activateTab(tabName, $html);
     });
 
-    // Don't auto-scroll on initial setup
-    console.log(`${MODULE_ID}: Tabs setup complete`);
+    console.log(`${MODULE_ID}: Enhanced tabs setup complete`);
   }
 
   static async renderMessage(message, $html) {
@@ -265,8 +400,9 @@ class TabbedChatManager {
 
     const msgHtml = $(rendered);
     const tab = TabbedChatManager._getMessageTab(message);
-    const currentScene = canvas?.scene?.id;
+    const currentScene = canvas?.scene?.id || 'default';
     const currentUserId = game.user.id;
+    const messageScene = message.speaker?.scene || currentScene;
     
     // Use author instead of deprecated user property
     const messageAuthor = message.author?.id || message.author;
@@ -276,10 +412,11 @@ class TabbedChatManager {
       author: messageAuthor,
       currentUser: currentUserId,
       scene: currentScene,
+      messageScene: messageScene,
       content: message.content?.substring(0, 30) + '...'
     });
     
-    // SIMPLIFIED filtering logic
+    // Enhanced filtering logic
     let shouldRender = TabbedChatManager._shouldRenderMessage(message, tab, currentScene, currentUserId, messageAuthor);
     
     if (!shouldRender) {
@@ -290,7 +427,7 @@ class TabbedChatManager {
     console.log(`${MODULE_ID}: ✅ RENDERING message to ${tab} tab`);
     
     if (tab && TabbedChatManager.tabPanels[tab]?.length) {
-      // Process /b command
+      // Process /b command - remove /b and add OOC prefix
       if (message.content?.startsWith('/b ')) {
         msgHtml.find('.message-content').each(function() {
           const content = $(this).html();
@@ -300,18 +437,20 @@ class TabbedChatManager {
       
       TabbedChatManager.tabPanels[tab].append(msgHtml);
       
-      // Add highlight effect
-      msgHtml.addClass('tabbed-whispers-highlight');
-      setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
+      // Store message in appropriate scene (except for messages tab which is global)
+      if (tab !== 'messages') {
+        TabbedChatManager._initializeSceneMessages(messageScene);
+        TabbedChatManager.sceneMessages[messageScene][tab].push(msgHtml.clone());
+      }
       
-      // Only scroll if this is the active tab AND there are multiple messages
+      // Add highlight effect
+      msgHtml.addClass('tabbed-messages-highlight');
+      setTimeout(() => msgHtml.removeClass('tabbed-messages-highlight'), 2500);
+      
+      // Only scroll if this is the active tab
       if (TabbedChatManager._activeTab === tab) {
         setTimeout(() => {
-          const panel = TabbedChatManager.tabPanels[tab];
-          const messageCount = panel.find('.chat-message').length;
-          if (messageCount > 1) { // Only auto-scroll if there are already messages
-            TabbedChatManager._scrollBottom($html, tab);
-          }
+          TabbedChatManager._scrollToLastMessage($html, tab);
         }, 50);
       }
     } else {
@@ -320,14 +459,16 @@ class TabbedChatManager {
   }
 
   static _getMessageTab(message) {
+    // Handle /b command override
+    if (message._tabchat_forceOOC || message.content?.startsWith('/b ')) {
+      return 'ooc';
+    }
+    
     // Handle rolls first
     if (message.isRoll || message.type === 'roll') return 'rolls';
     
-    // Handle whispers
-    if (message.whisper?.length > 0) return 'whisper';
-    
-    // Check for /b bypass command
-    if (message.content?.startsWith('/b ')) return 'ooc';
+    // Handle whispers (now messages)
+    if (message.whisper?.length > 0) return 'messages';
     
     // Check if message has a token speaker
     const speaker = message.speaker;
@@ -341,11 +482,10 @@ class TabbedChatManager {
   }
 
   static _shouldRenderMessage(message, tab, currentScene, currentUserId, messageAuthor) {
-    // Get scene info
-    const messageScene = message.speaker?.scene;
+    const messageScene = message.speaker?.scene || currentScene;
     
-    if (tab === 'whisper') {
-      // WHISPER: GMs see all, players see only their own
+    if (tab === 'messages') {
+      // MESSAGES (whisper): GMs see all, players see only their own
       if (game.user.isGM) {
         return true; // GM sees all whispers
       } else {
@@ -356,8 +496,8 @@ class TabbedChatManager {
         return isAuthor || isTarget;
       }
     } else if (tab === 'ic' || tab === 'ooc' || tab === 'rolls') {
-      // WORLD/OOC/ROLLS: Show if same scene OR if user is author
-      const isSameScene = !messageScene || !currentScene || (messageScene === currentScene);
+      // WORLD/OOC/GAME: Show if same scene OR if user is author
+      const isSameScene = (messageScene === currentScene);
       const isAuthor = (messageAuthor === currentUserId);
       return isSameScene || isAuthor;
     }
@@ -367,20 +507,51 @@ class TabbedChatManager {
 
   static async updateMessage(message, msgHtml, $html) {
     const tab = TabbedChatManager._getMessageTab(message);
+    const messageScene = message.speaker?.scene || TabbedChatManager._currentScene;
+    
     if (tab && TabbedChatManager.tabPanels[tab]?.length) {
       const existing = TabbedChatManager.tabPanels[tab].find(`[data-message-id="${message.id}"]`);
       if (existing.length) {
         existing.replaceWith(msgHtml);
+        
+        // Update stored message for scene instancing (except messages tab)
+        if (tab !== 'messages') {
+          TabbedChatManager._initializeSceneMessages(messageScene);
+          const storedMessages = TabbedChatManager.sceneMessages[messageScene][tab];
+          const msgIndex = storedMessages.findIndex(msg => 
+            msg.find(`[data-message-id="${message.id}"]`).length > 0
+          );
+          if (msgIndex !== -1) {
+            storedMessages[msgIndex] = msgHtml.clone();
+          }
+        }
+        
         if (TabbedChatManager._activeTab === tab) {
-          TabbedChatManager._scrollBottom($html, tab);
+          TabbedChatManager._scrollToLastMessage($html, tab);
         }
       }
     }
   }
 
   static deleteMessage(messageId, $html) {
-    ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
+    ['ic', 'ooc', 'rolls', 'messages'].forEach((tab) => {
+      // Remove from display
       TabbedChatManager.tabPanels[tab]?.find(`[data-message-id="${messageId}"]`).remove();
+      
+      // Remove from stored messages (except messages tab)
+      if (tab !== 'messages') {
+        Object.keys(TabbedChatManager.sceneMessages).forEach(sceneId => {
+          const sceneMessages = TabbedChatManager.sceneMessages[sceneId][tab];
+          if (sceneMessages) {
+            const msgIndex = sceneMessages.findIndex(msg => 
+              msg.find(`[data-message-id="${messageId}"]`).length > 0
+            );
+            if (msgIndex !== -1) {
+              sceneMessages.splice(msgIndex, 1);
+            }
+          }
+        });
+      }
     });
   }
 
@@ -391,19 +562,36 @@ class TabbedChatManager {
     $html.find(`.tabchat-panel[data-tab="${tabName}"]`).addClass('active');
     TabbedChatManager._activeTab = tabName;
     
-    // Scroll to bottom when switching tabs, but only if there are messages
+    // Scroll to last message when switching tabs
     setTimeout(() => {
-      const panel = TabbedChatManager.tabPanels[tabName];
-      if (panel && panel.find('.chat-message').length > 0) {
-        TabbedChatManager._scrollBottom($html, tabName);
-      }
+      TabbedChatManager._scrollToLastMessage($html, tabName);
     }, 50);
   }
 
-  static _scrollBottom($html, tabName = TabbedChatManager._activeTab) {
+  static _scrollToLastMessage($html, tabName = TabbedChatManager._activeTab) {
     const ol = $html.find(`.tabchat-panel[data-tab="${tabName}"] ol.chat-messages`);
     if (ol?.length) {
-      ol.prop('scrollTop', ol[0].scrollHeight);
+      const messages = ol.find('.chat-message');
+      if (messages.length > 0) {
+        // Scroll to the last message
+        const lastMessage = messages.last();
+        ol.animate({
+          scrollTop: ol[0].scrollHeight
+        }, 300, () => {
+          // Center on the last message
+          const messageOffset = lastMessage.position();
+          if (messageOffset) {
+            const containerHeight = ol.height();
+            const messageHeight = lastMessage.outerHeight();
+            const centerOffset = containerHeight / 2 - messageHeight / 2;
+            const newScrollTop = ol.scrollTop() + messageOffset.top - centerOffset;
+            
+            if (newScrollTop > 0) {
+              ol.animate({ scrollTop: newScrollTop }, 200);
+            }
+          }
+        });
+      }
     }
   }
 }
