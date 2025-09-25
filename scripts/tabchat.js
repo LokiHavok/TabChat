@@ -1,4 +1,4 @@
-// Tabbed Chat Module for Foundry VTT v13 - DOM DETECTIVE VERSION
+// Tabbed Chat Module for Foundry VTT v13 - CLEAN WORKING VERSION
 // 4-tab system: WORLD | OOC | GAME | MESSAGES
 
 const MODULE_ID = 'tabchat';
@@ -9,24 +9,24 @@ class TabbedChatManager {
   static _hasInjectedTabs = false;
 
   static init() {
-    console.log(`${MODULE_ID} | DOM DETECTIVE - Init called`);
+    console.log(`${MODULE_ID} | CLEAN WORKING - Init called`);
   }
 
   static ready() {
-    console.log(`${MODULE_ID} | DOM DETECTIVE - Ready called`);
+    console.log(`${MODULE_ID} | CLEAN WORKING - Ready called`);
     
-    // Multiple attempts with DOM investigation
-    setTimeout(() => TabbedChatManager.investigateAndInject(), 1000);
-    setTimeout(() => TabbedChatManager.investigateAndInject(), 2000);
-    setTimeout(() => TabbedChatManager.investigateAndInject(), 3000);
+    // Multiple attempts to inject
+    setTimeout(() => TabbedChatManager.tryInject(), 1000);
+    setTimeout(() => TabbedChatManager.tryInject(), 2000);
+    setTimeout(() => TabbedChatManager.tryInject(), 3000);
   }
 
   static setupHooks() {
-    console.log(`${MODULE_ID} | DOM DETECTIVE - Setting up hooks`);
+    console.log(`${MODULE_ID} | CLEAN WORKING - Setting up hooks`);
     
     // Try injection on chat render
     Hooks.on('renderChatLog', () => {
-      setTimeout(() => TabbedChatManager.investigateAndInject(), 200);
+      setTimeout(() => TabbedChatManager.tryInject(), 200);
     });
     
     // Handle /b commands
@@ -44,301 +44,285 @@ class TabbedChatManager {
       return true;
     });
     
-    // Handle new messages
+    // Handle new messages - with lockup prevention
     Hooks.on('createChatMessage', (message) => {
       if (TabbedChatManager._hasInjectedTabs) {
-        setTimeout(() => TabbedChatManager.renderMessage(message), 50);
+        // Prevent lockup with immediate timeout
+        setTimeout(() => {
+          try {
+            TabbedChatManager.renderMessage(message);
+          } catch (err) {
+            console.error(`${MODULE_ID}: Error in createChatMessage:`, err);
+          }
+        }, 10);
       }
     });
   }
 
-  static investigateAndInject() {
-    if (TabbedChatManager._hasInjectedTabs) {
-      console.log(`${MODULE_ID}: Already injected`);
-      return;
-    }
+  static tryInject() {
+    if (TabbedChatManager._hasInjectedTabs || !ui.chat?.element) return;
 
-    if (!ui.chat?.element) {
-      console.log(`${MODULE_ID}: Chat element not ready`);
-      return;
-    }
-
-    console.log(`${MODULE_ID}: 🔍 INVESTIGATING DOM STRUCTURE`);
+    console.log(`${MODULE_ID}: Attempting clean injection`);
     const $chat = $(ui.chat.element);
 
-    // Investigation: What elements exist?
-    console.log(`${MODULE_ID}: Chat element HTML:`, $chat[0].outerHTML.substring(0, 500));
-    
-    // Look for various possible chat containers
+    // Find any suitable chat container
     const possibleSelectors = [
       'ol.chat-messages',
       'ol',
       '.chat-messages',
-      '.chat-log',
-      '#chat-log',
-      '.window-content ol',
-      '[data-tab="chat"] ol',
-      '.chat-messages-container'
+      '.window-content ol'
     ];
 
     let $targetElement = null;
-    let selectorUsed = '';
-
     for (const selector of possibleSelectors) {
       const $found = $chat.find(selector);
       if ($found.length > 0) {
-        console.log(`${MODULE_ID}: Found ${$found.length} elements with selector: ${selector}`);
-        $found.each((i, el) => {
-          console.log(`${MODULE_ID}: Element ${i}:`, {
-            tagName: el.tagName,
-            className: el.className,
-            id: el.id,
-            innerHTML: el.innerHTML.substring(0, 100)
-          });
-        });
-        
-        if (!$targetElement) {
-          $targetElement = $found.first();
-          selectorUsed = selector;
-        }
+        $targetElement = $found.first();
+        break;
       }
     }
 
     if (!$targetElement || !$targetElement.length) {
-      console.error(`${MODULE_ID}: ❌ No suitable target element found`);
-      
-      // Last resort: just inject into the main chat window
-      console.log(`${MODULE_ID}: 🚨 LAST RESORT - Injecting into window-content`);
-      const $windowContent = $chat.find('.window-content');
-      if ($windowContent.length) {
-        TabbedChatManager.bruteForceInject($windowContent);
-        return;
-      } else {
-        console.error(`${MODULE_ID}: Even window-content not found!`);
-        return;
-      }
+      console.warn(`${MODULE_ID}: No target found, using window-content`);
+      $targetElement = $chat.find('.window-content');
+      if (!$targetElement.length) return;
     }
 
-    console.log(`${MODULE_ID}: ✅ Using target element with selector: ${selectorUsed}`);
-    
-    // Hide the target element
+    // Hide original
     $targetElement.css({
       'position': 'absolute',
       'top': '-9999px',
-      'left': '-9999px',
       'visibility': 'hidden'
     });
 
-    // Create simple tabs that should definitely be visible
-    const tabsHtml = `
-      <div id="TABCHAT-OBVIOUS" style="
-        position: relative !important;
-        z-index: 99999 !important;
-        background: #ff0000 !important;
-        border: 10px solid #00ff00 !important;
-        height: 400px !important;
-        width: 100% !important;
-        display: block !important;
+    // Create clean tabs with v11 styling
+    const cleanTabsHtml = `
+      <div class="tabchat-container" style="
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        background: transparent;
+        position: relative;
+        z-index: 100;
       ">
-        <div style="
-          background: #0000ff !important;
-          color: #ffffff !important;
-          padding: 20px !important;
-          font-size: 20px !important;
-          font-weight: bold !important;
-          text-align: center !important;
-        ">TABCHAT IS HERE!</div>
-        
-        <div id="tabchat-buttons" style="
-          height: 60px !important;
-          background: #ffff00 !important;
-          display: block !important;
+        <nav class="tabchat-nav" style="
+          display: flex;
+          flex-shrink: 0;
+          background: #1a1a1a;
+          border-bottom: 2px solid #215112;
+          height: 40px;
+          margin: 0;
+          padding: 0;
         ">
-          <button class="tabchat-btn active" data-tab="world" style="
-            width: 25% !important;
-            height: 60px !important;
-            float: left !important;
-            background: #215112 !important;
-            color: white !important;
-            border: 3px solid #000000 !important;
-            font-size: 16px !important;
-            font-weight: bold !important;
-            cursor: pointer !important;
-            display: block !important;
-          ">WORLD</button>
-          
-          <button class="tabchat-btn" data-tab="ooc" style="
-            width: 25% !important;
-            height: 60px !important;
-            float: left !important;
-            background: #666666 !important;
-            color: white !important;
-            border: 3px solid #000000 !important;
-            font-size: 16px !important;
-            font-weight: bold !important;
-            cursor: pointer !important;
-            display: block !important;
-          ">OOC</button>
-          
-          <button class="tabchat-btn" data-tab="game" style="
-            width: 25% !important;
-            height: 60px !important;
-            float: left !important;
-            background: #666666 !important;
-            color: white !important;
-            border: 3px solid #000000 !important;
-            font-size: 16px !important;
-            font-weight: bold !important;
-            cursor: pointer !important;
-            display: block !important;
-          ">GAME</button>
-          
-          <button class="tabchat-btn" data-tab="messages" style="
-            width: 25% !important;
-            height: 60px !important;
-            float: left !important;
-            background: #666666 !important;
-            color: white !important;
-            border: 3px solid #000000 !important;
-            font-size: 16px !important;
-            font-weight: bold !important;
-            cursor: pointer !important;
-            display: block !important;
-          ">MESSAGES</button>
-        </div>
-        
-        <div id="tabchat-content" style="
-          height: 280px !important;
-          background: #ffffff !important;
-          border: 5px solid #000000 !important;
-          overflow: hidden !important;
-          position: relative !important;
+          <div class="tabchat-tab active" data-tab="world" style="
+            flex: 1;
+            padding: 12px 8px;
+            cursor: pointer;
+            background: #215112;
+            color: #fff;
+            border-right: 1px solid #444;
+            font-weight: bold;
+            font-size: 11px;
+            text-transform: uppercase;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+          ">WORLD</div>
+          <div class="tabchat-tab" data-tab="ooc" style="
+            flex: 1;
+            padding: 12px 8px;
+            cursor: pointer;
+            background: #2a2a2a;
+            color: #999;
+            border-right: 1px solid #444;
+            font-weight: bold;
+            font-size: 11px;
+            text-transform: uppercase;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+          ">OOC</div>
+          <div class="tabchat-tab" data-tab="game" style="
+            flex: 1;
+            padding: 12px 8px;
+            cursor: pointer;
+            background: #2a2a2a;
+            color: #999;
+            border-right: 1px solid #444;
+            font-weight: bold;
+            font-size: 11px;
+            text-transform: uppercase;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+          ">GAME</div>
+          <div class="tabchat-tab" data-tab="messages" style="
+            flex: 1;
+            padding: 12px 8px;
+            cursor: pointer;
+            background: #2a2a2a;
+            color: #999;
+            font-weight: bold;
+            font-size: 11px;
+            text-transform: uppercase;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+          ">MESSAGES</div>
+        </nav>
+        <section class="tabchat-panel active" data-tab="world" style="
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          background: rgba(0,0,0,0.05);
         ">
-          <div class="tabchat-panel active" data-tab="world" style="
-            height: 100% !important;
-            overflow-y: auto !important;
-            padding: 10px !important;
-            background: #e0ffe0 !important;
-            display: block !important;
+          <div class="chat-messages" style="
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 8px;
+            margin: 0;
+            background: transparent;
           "></div>
-          
-          <div class="tabchat-panel" data-tab="ooc" style="
-            height: 100% !important;
-            overflow-y: auto !important;
-            padding: 10px !important;
-            background: #ffe0e0 !important;
-            display: none !important;
+        </section>
+        <section class="tabchat-panel" data-tab="ooc" style="
+          flex: 1;
+          display: none;
+          flex-direction: column;
+          overflow: hidden;
+          background: rgba(0,0,0,0.05);
+        ">
+          <div class="chat-messages" style="
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 8px;
+            margin: 0;
+            background: transparent;
           "></div>
-          
-          <div class="tabchat-panel" data-tab="game" style="
-            height: 100% !important;
-            overflow-y: auto !important;
-            padding: 10px !important;
-            background: #e0e0ff !important;
-            display: none !important;
+        </section>
+        <section class="tabchat-panel" data-tab="game" style="
+          flex: 1;
+          display: none;
+          flex-direction: column;
+          overflow: hidden;
+          background: rgba(0,0,0,0.05);
+        ">
+          <div class="chat-messages" style="
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 8px;
+            margin: 0;
+            background: transparent;
           "></div>
-          
-          <div class="tabchat-panel" data-tab="messages" style="
-            height: 100% !important;
-            overflow-y: auto !important;
-            padding: 10px !important;
-            background: #ffffe0 !important;
-            display: none !important;
+        </section>
+        <section class="tabchat-panel" data-tab="messages" style="
+          flex: 1;
+          display: none;
+          flex-direction: column;
+          overflow: hidden;
+          background: rgba(0,0,0,0.05);
+        ">
+          <div class="chat-messages" style="
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 8px;
+            margin: 0;
+            background: transparent;
           "></div>
-        </div>
+        </section>
       </div>
     `;
 
-    // Insert the tabs
+    // Insert tabs
     try {
-      $targetElement.after(tabsHtml);
-      console.log(`${MODULE_ID}: ✅ INSERTED OBVIOUS TABS after target element`);
+      $targetElement.after(cleanTabsHtml);
+      console.log(`${MODULE_ID}: Clean tabs inserted`);
     } catch (err) {
-      console.error(`${MODULE_ID}: Error inserting after target:`, err);
-      try {
-        $targetElement.parent().append(tabsHtml);
-        console.log(`${MODULE_ID}: ✅ INSERTED OBVIOUS TABS into parent`);
-      } catch (err2) {
-        console.error(`${MODULE_ID}: Error inserting into parent:`, err2);
-        return;
-      }
+      $targetElement.parent().append(cleanTabsHtml);
+      console.log(`${MODULE_ID}: Clean tabs appended to parent`);
     }
-
-    TabbedChatManager.finishSetup($chat);
-  }
-
-  static bruteForceInject($container) {
-    console.log(`${MODULE_ID}: 🚨 BRUTE FORCE INJECTION into container`);
-    
-    const bruteForceHtml = `
-      <div id="TABCHAT-BRUTE-FORCE" style="
-        position: fixed !important;
-        top: 100px !important;
-        left: 100px !important;
-        width: 400px !important;
-        height: 300px !important;
-        z-index: 999999 !important;
-        background: #ff0000 !important;
-        border: 10px solid #00ff00 !important;
-        color: #ffffff !important;
-        font-size: 20px !important;
-        padding: 20px !important;
-      ">
-        <div>TABCHAT BRUTE FORCE INJECTION</div>
-        <button style="background: #215112; color: white; padding: 10px; margin: 5px; font-size: 14px; border: none; cursor: pointer;">WORLD</button>
-        <button style="background: #666; color: white; padding: 10px; margin: 5px; font-size: 14px; border: none; cursor: pointer;">OOC</button>
-        <button style="background: #666; color: white; padding: 10px; margin: 5px; font-size: 14px; border: none; cursor: pointer;">GAME</button>
-        <button style="background: #666; color: white; padding: 10px; margin: 5px; font-size: 14px; border: none; cursor: pointer;">MESSAGES</button>
-      </div>
-    `;
-    
-    $container.append(bruteForceHtml);
-    console.log(`${MODULE_ID}: ✅ BRUTE FORCE INJECTION COMPLETE`);
-  }
-
-  static finishSetup($chat) {
-    // Verify the tabs were actually inserted
-    const $obvious = $chat.find('#TABCHAT-OBVIOUS');
-    if (!$obvious.length) {
-      console.error(`${MODULE_ID}: ❌ OBVIOUS TABS NOT FOUND AFTER INSERTION`);
-      return;
-    }
-
-    console.log(`${MODULE_ID}: ✅ OBVIOUS TABS CONFIRMED IN DOM`);
 
     // Cache panels
     TabbedChatManager.tabPanels = {
-      world: $chat.find('.tabchat-panel[data-tab="world"]'),
-      ooc: $chat.find('.tabchat-panel[data-tab="ooc"]'),
-      game: $chat.find('.tabchat-panel[data-tab="game"]'),
-      messages: $chat.find('.tabchat-panel[data-tab="messages"]')
+      world: $chat.find('.tabchat-panel[data-tab="world"] .chat-messages'),
+      ooc: $chat.find('.tabchat-panel[data-tab="ooc"] .chat-messages'),
+      game: $chat.find('.tabchat-panel[data-tab="game"] .chat-messages'),
+      messages: $chat.find('.tabchat-panel[data-tab="messages"] .chat-messages')
     };
 
-    // Set up click handlers
-    $chat.find('.tabchat-btn').off('click.tabchat').on('click.tabchat', function(event) {
+    // Set up click handlers with lockup prevention
+    $chat.off('click.tabchat').on('click.tabchat', '.tabchat-tab', function(event) {
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation();
       
-      const $btn = $(this);
-      const tabName = $btn.data('tab');
+      // Prevent rapid clicking
+      if ($(this).hasClass('clicking')) return;
+      $(this).addClass('clicking');
+      setTimeout(() => $(this).removeClass('clicking'), 200);
       
-      console.log(`${MODULE_ID}: 🎯 TAB CLICKED: ${tabName}`);
+      const $tab = $(this);
+      const tabName = $tab.data('tab');
       
-      // Update button styles
-      $chat.find('.tabchat-btn').removeClass('active').css('background', '#666666');
-      $btn.addClass('active').css('background', '#215112');
+      console.log(`${MODULE_ID}: Clean tab clicked: ${tabName}`);
       
-      // Update panels
-      $chat.find('.tabchat-panel').removeClass('active').hide();
-      $chat.find(`.tabchat-panel[data-tab="${tabName}"]`).addClass('active').show();
-      
-      TabbedChatManager._activeTab = tabName;
-      
-      console.log(`${MODULE_ID}: ✅ Switched to ${tabName}`);
+      try {
+        // Update tab styles with hover effects
+        $chat.find('.tabchat-tab').each(function() {
+          $(this).removeClass('active').css({
+            'background': '#2a2a2a',
+            'color': '#999'
+          }).on('mouseenter', function() {
+            if (!$(this).hasClass('active')) {
+              $(this).css('background', '#3a3a3a');
+            }
+          }).on('mouseleave', function() {
+            if (!$(this).hasClass('active')) {
+              $(this).css('background', '#2a2a2a');
+            }
+          });
+        });
+        
+        $tab.addClass('active').css({
+          'background': '#215112',
+          'color': '#fff'
+        }).off('mouseenter mouseleave');
+        
+        // Update panels
+        $chat.find('.tabchat-panel').removeClass('active').css('display', 'none');
+        $chat.find(`.tabchat-panel[data-tab="${tabName}"]`).addClass('active').css('display', 'flex');
+        
+        TabbedChatManager._activeTab = tabName;
+        
+        // Auto-scroll
+        const panel = TabbedChatManager.tabPanels[tabName];
+        if (panel && panel[0]) {
+          setTimeout(() => {
+            panel[0].scrollTop = panel[0].scrollHeight;
+          }, 50);
+        }
+        
+        console.log(`${MODULE_ID}: Switched to ${tabName}`);
+        
+      } catch (err) {
+        console.error(`${MODULE_ID}: Error in click handler:`, err);
+      }
     });
 
     TabbedChatManager._hasInjectedTabs = true;
-    console.log(`${MODULE_ID}: ✅ SETUP COMPLETE - TABS SHOULD BE VISIBLE`);
+    console.log(`${MODULE_ID}: ✅ Clean tabs setup complete`);
 
     // Load existing messages
     setTimeout(() => {
@@ -347,7 +331,7 @@ class TabbedChatManager {
       for (const message of messages) {
         TabbedChatManager.renderMessage(message);
       }
-    }, 500);
+    }, 300);
   }
 
   static async renderMessage(message) {
@@ -384,8 +368,13 @@ class TabbedChatManager {
       }
     }
 
+    // Add highlight effect
+    $msgHtml.addClass('tabchat-highlight');
+    setTimeout(() => $msgHtml.removeClass('tabchat-highlight'), 2000);
+
     panel.append($msgHtml);
 
+    // Auto-scroll if active tab
     if (TabbedChatManager._activeTab === tab && panel[0]) {
       setTimeout(() => {
         panel[0].scrollTop = panel[0].scrollHeight;
@@ -408,7 +397,29 @@ class TabbedChatManager {
   }
 }
 
+// Add highlight CSS
+const highlightCSS = `
+  <style id="tabchat-highlight-css">
+    .tabchat-highlight {
+      animation: tabchat-glow 2s ease-out;
+    }
+    @keyframes tabchat-glow {
+      0% { 
+        background-color: rgba(33, 81, 18, 0.4);
+        box-shadow: 0 0 8px rgba(33, 81, 18, 0.6);
+      }
+      100% { 
+        background-color: transparent;
+        box-shadow: none;
+      }
+    }
+  </style>
+`;
+
 // Initialize
 Hooks.once('init', TabbedChatManager.init);
-Hooks.once('ready', TabbedChatManager.ready);
+Hooks.once('ready', () => {
+  $('head').append(highlightCSS);
+  TabbedChatManager.ready();
+});
 TabbedChatManager.setupHooks();
