@@ -1,5 +1,5 @@
-// Tabbed Chat Module for Foundry VTT v13 - FIXED VERSION
-// Inspired by fvtt-tabbed-whispers and proximity-text-chat
+// Tabbed Chat Module for Foundry VTT v13 - Core Features Only
+// Simple 4-tab system: WORLD | OOC | ROLLS | WHISPER
 
 const MODULE_ID = 'tabchat';
 
@@ -9,19 +9,9 @@ class TabbedChatManager {
   static _initialized = false;
 
   static init() {
-    console.log(`${MODULE_ID} | FIXED VERSION LOADING - Init called`);
+    console.log(`${MODULE_ID} | CORE VERSION - Init called`);
     
-    game.settings.register(MODULE_ID, 'proximityRange', {
-      name: 'IC Proximity Range',
-      hint: 'Max distance (units) for IC messages to appear (default: 30).',
-      scope: 'world',
-      config: true,
-      default: 30,
-      type: Number
-    });
-    console.log(`${MODULE_ID} | Initialized settings`);
-    
-    // --- Prototype patch using v13 namespace ---
+    // Use the new v13 namespace
     try {
       const ChatLogClass = foundry.applications.sidebar.tabs.ChatLog;
       if (!ChatLogClass.prototype._tabchat_originalPostOne) {
@@ -54,9 +44,9 @@ class TabbedChatManager {
       return;
     }
     TabbedChatManager._initialized = true;
-    console.log(`${MODULE_ID} | FIXED VERSION - Ready called`);
+    console.log(`${MODULE_ID} | CORE VERSION - Ready called`);
     
-    // Patch the actual ui.chat instance method too
+    // Patch ui.chat instance
     try {
       if (ui.chat && typeof ui.chat._postOne === 'function') {
         if (!ui.chat._tabchat_originalPostOne) ui.chat._tabchat_originalPostOne = ui.chat._postOne;
@@ -81,20 +71,7 @@ class TabbedChatManager {
       console.warn(`${MODULE_ID} | Failed to patch ui.chat._postOne instance (continuing)`, err);
     }
     
-    // Failsafe: ensure a hidden ol exists
-    try {
-      if (ui.chat && ui.chat.element) {
-        const $element = $(ui.chat.element);
-        if (!$element.find('ol.chat-messages').length) {
-          $element.append('<ol class="chat-messages" style="display:none"></ol>');
-          console.log(`${MODULE_ID} | Inserted dummy chat-messages <ol> (failsafe)`);
-        }
-      }
-    } catch (err) {
-      console.warn(`${MODULE_ID} | Could not add dummy ol failsafe`, err);
-    }
-    
-    // Render existing messages
+    // Render existing messages after a delay
     setTimeout(() => {
       try {
         if (!ui.chat?.element) {
@@ -103,56 +80,50 @@ class TabbedChatManager {
         }
         const $html = $(ui.chat.element);
         const messages = game.messages.contents.sort((a, b) => a.id.localeCompare(b.id));
+        console.log(`${MODULE_ID}: Loading ${messages.length} existing messages`);
         for (const message of messages) {
           TabbedChatManager.renderMessage(message, $html);
         }
+        console.log(`${MODULE_ID}: Finished loading existing messages`);
       } catch (err) {
-        console.error(`${MODULE_ID} | Error rendering fallback messages`, err);
+        console.error(`${MODULE_ID} | Error rendering existing messages`, err);
       }
     }, 1500);
   }
 
   static setupHooks() {
-    console.log(`${MODULE_ID} | FIXED VERSION - Setting up hooks`);
+    console.log(`${MODULE_ID} | CORE VERSION - Setting up hooks`);
     
-    // Inject tabs on chat render
     Hooks.on('renderChatLog', async (app, html, data) => {
       await TabbedChatManager.injectTabs(app, html, data);
     });
     
-    // Simple pre-create logging
     Hooks.on('preCreateChatMessage', (doc, data, options, userId) => {
-      console.log(`${MODULE_ID}: FIXED - preCreateChatMessage`, { id: doc?.id, content: data?.content });
+      console.log(`${MODULE_ID}: preCreateChatMessage`, { id: doc?.id, content: data?.content });
     });
     
-    // CRITICAL FIX: Suppress Foundry's default render when tabbed UI is active
+    // Suppress Foundry's default render when tabbed UI is active
     Hooks.on('renderChatMessageHTML', (message, html, data) => {
       try {
-        // Check if our tabbed interface is active
         const hasTabUI = ui.chat?.element && $(ui.chat.element).find('.tabchat-container').length > 0;
-        
         if (hasTabUI) {
-          console.log(`${MODULE_ID}: FIXED - Suppressing renderChatMessageHTML for tabbed UI`, { id: message.id });
-          // Remove the HTML element to prevent Foundry from appending it
+          console.log(`${MODULE_ID}: Suppressing renderChatMessageHTML for tabbed UI`, { id: message.id });
           if (html) {
             if (html instanceof HTMLElement && typeof html.remove === 'function') {
               html.remove();
             } else if (html && typeof html.remove === 'function') {
-              html.remove(); // jQuery
+              html.remove();
             }
           }
-          return false; // Prevent Foundry's default behavior
+          return false;
         }
-        
-        console.log(`${MODULE_ID}: FIXED - Allowing default renderChatMessageHTML`, { id: message.id });
         return true;
       } catch (err) {
         console.error(`${MODULE_ID}: Error in renderChatMessageHTML hook`, err);
-        return true; // Don't break Foundry if something goes wrong
+        return true;
       }
     });
     
-    // Create/Update/Delete handlers
     Hooks.on('createChatMessage', async (message) => {
       await TabbedChatManager.renderMessage(message, $(ui.chat.element));
     });
@@ -165,24 +136,6 @@ class TabbedChatManager {
     Hooks.on('deleteChatMessage', (message, options, userId) => {
       TabbedChatManager.deleteMessage(message.id, $(ui.chat.element));
     });
-    
-    // Cleanup on unload
-    Hooks.on('unload', () => {
-      try {
-        const ChatLogClass = foundry.applications.sidebar.tabs.ChatLog;
-        if (ChatLogClass.prototype._tabchat_originalPostOne) {
-          ChatLogClass.prototype._postOne = ChatLogClass.prototype._tabchat_originalPostOne;
-          delete ChatLogClass.prototype._tabchat_originalPostOne;
-        }
-        if (ui.chat && ui.chat._tabchat_originalPostOne) {
-          ui.chat._postOne = ui.chat._tabchat_originalPostOne;
-          delete ui.chat._tabchat_originalPostOne;
-        }
-        console.log(`${MODULE_ID} | Restored original methods on unload`);
-      } catch (err) {
-        console.warn(`${MODULE_ID} | Error restoring originals on unload`, err);
-      }
-    });
   }
 
   // Core Methods
@@ -193,7 +146,7 @@ class TabbedChatManager {
     }
 
     const $html = $(html);
-    console.log(`${MODULE_ID}: FIXED - Injecting tabs`, { initialized: TabbedChatManager._initialized });
+    console.log(`${MODULE_ID}: CORE - Injecting tabs`);
 
     let defaultOl = $html.find('ol.chat-messages');
     if (!defaultOl.length) {
@@ -245,11 +198,11 @@ class TabbedChatManager {
       'visibility': 'hidden'
     });
     
-    // Fixed tab order: IC -> OOC -> ROLLS -> WHISPER, with IC renamed to WORLD
+    // CORRECT tab order: WORLD, OOC, GAME, WHISPER
     const tabs = [
       { id: 'ic', label: 'WORLD' },
       { id: 'ooc', label: 'OOC' },
-      { id: 'rolls', label: 'ROLLS' },
+      { id: 'rolls', label: 'GAME' },
       { id: 'whisper', label: 'WHISPER' }
     ];
     
@@ -270,9 +223,9 @@ class TabbedChatManager {
       </div>
     `;
     
-    // Insert tabbed interface AFTER the original ol instead of replacing it
+    // Insert tabbed interface AFTER the original ol
     defaultOl.after(tabHtml);
-    console.log(`${MODULE_ID}: FIXED - Added tabbed interface with correct tab order`);
+    console.log(`${MODULE_ID}: CORE - Added tabbed interface with correct order: WORLD | OOC | ROLLS | WHISPER`);
 
     // Cache tab panels
     ['ic', 'ooc', 'rolls', 'whisper'].forEach((tab) => {
@@ -287,7 +240,8 @@ class TabbedChatManager {
       TabbedChatManager._activateTab(tabName, $html);
     });
 
-    TabbedChatManager._scrollBottom($html);
+    // Don't auto-scroll on initial setup
+    console.log(`${MODULE_ID}: Tabs setup complete`);
   }
 
   static async renderMessage(message, $html) {
@@ -312,87 +266,32 @@ class TabbedChatManager {
     const msgHtml = $(rendered);
     const tab = TabbedChatManager._getMessageTab(message);
     const currentScene = canvas?.scene?.id;
-    const messageScene = message.speaker?.scene || message._messageScene;
     const currentUserId = game.user.id;
     
-    // Scene-based and permission filtering logic
-    let shouldRender = true;
+    // Use author instead of deprecated user property
+    const messageAuthor = message.author?.id || message.author;
     
-    if (tab === 'ic') {
-      // IC (WORLD) messages only show in their originating scene
-      shouldRender = (messageScene === currentScene);
-      console.log(`${MODULE_ID}: IC message scene check`, { 
-        messageScene, 
-        currentScene, 
-        shouldRender 
-      });
-    } else if (tab === 'ooc') {
-      if (message._isGlobalOOC) {
-        // Global OOC messages (/g, /gooc) show everywhere
-        shouldRender = true;
-        console.log(`${MODULE_ID}: Global OOC message - rendering in all scenes`);
-      } else {
-        // Local OOC messages only show in their originating scene
-        shouldRender = (messageScene === currentScene);
-        console.log(`${MODULE_ID}: Local OOC message scene check`, { 
-          messageScene, 
-          currentScene, 
-          shouldRender 
-        });
-      }
-    } else if (tab === 'rolls') {
-      // ROLLS are now scene-specific (confined to scene like WORLD/IC)
-      shouldRender = (messageScene === currentScene);
-      console.log(`${MODULE_ID}: Rolls message scene check`, { 
-        messageScene, 
-        currentScene, 
-        shouldRender 
-      });
-    } else if (tab === 'whisper') {
-      // WHISPER filtering: players see only their whispers, GMs see ALL whispers
-      if (game.user.isGM) {
-        shouldRender = true; // GMs see all whispers
-        console.log(`${MODULE_ID}: GM sees all whispers`);
-      } else {
-        // Players only see whispers they're involved in
-        const whisperTargets = message.whisper || [];
-        const isWhisperAuthor = message.user === currentUserId;
-        const isWhisperTarget = whisperTargets.includes(currentUserId);
-        shouldRender = isWhisperAuthor || isWhisperTarget;
-        console.log(`${MODULE_ID}: Whisper visibility check`, { 
-          isAuthor: isWhisperAuthor, 
-          isTarget: isWhisperTarget, 
-          shouldRender,
-          whisperTargets 
-        });
-      }
-    }
+    console.log(`${MODULE_ID}: Processing message for ${tab} tab`, {
+      id: message.id,
+      author: messageAuthor,
+      currentUser: currentUserId,
+      scene: currentScene,
+      content: message.content?.substring(0, 30) + '...'
+    });
+    
+    // SIMPLIFIED filtering logic
+    let shouldRender = TabbedChatManager._shouldRenderMessage(message, tab, currentScene, currentUserId, messageAuthor);
     
     if (!shouldRender) {
-      console.log(`${MODULE_ID}: Skipping message rendering`, { 
-        tab, 
-        reason: tab === 'whisper' ? 'not involved in whisper' : 'wrong scene',
-        messageScene, 
-        currentScene 
-      });
+      console.log(`${MODULE_ID}: Skipping message - filtered out`);
       return;
     }
     
-    console.log(`${MODULE_ID}: FIXED - Rendering message to ${tab} tab`);
+    console.log(`${MODULE_ID}: ✅ RENDERING message to ${tab} tab`);
     
     if (tab && TabbedChatManager.tabPanels[tab]?.length) {
-      // Process chat commands by removing the command prefix
-      if (message.content?.startsWith('/g ')) {
-        msgHtml.find('.message-content').each(function() {
-          const content = $(this).html();
-          $(this).html(content.replace('/g ', '[GLOBAL] '));
-        });
-      } else if (message.content?.startsWith('/gooc ')) {
-        msgHtml.find('.message-content').each(function() {
-          const content = $(this).html();
-          $(this).html(content.replace('/gooc ', '[GLOBAL] '));
-        });
-      } else if (message.content?.startsWith('/b ')) {
+      // Process /b command
+      if (message.content?.startsWith('/b ')) {
         msgHtml.find('.message-content').each(function() {
           const content = $(this).html();
           $(this).html(content.replace('/b ', '[OOC] '));
@@ -400,118 +299,70 @@ class TabbedChatManager {
       }
       
       TabbedChatManager.tabPanels[tab].append(msgHtml);
-      if (TabbedChatManager._activeTab === tab) {
-        TabbedChatManager._scrollBottom($html, tab);
-      }
       
       // Add highlight effect
       msgHtml.addClass('tabbed-whispers-highlight');
       setTimeout(() => msgHtml.removeClass('tabbed-whispers-highlight'), 2500);
+      
+      // Only scroll if this is the active tab AND there are multiple messages
+      if (TabbedChatManager._activeTab === tab) {
+        setTimeout(() => {
+          const panel = TabbedChatManager.tabPanels[tab];
+          const messageCount = panel.find('.chat-message').length;
+          if (messageCount > 1) { // Only auto-scroll if there are already messages
+            TabbedChatManager._scrollBottom($html, tab);
+          }
+        }, 50);
+      }
     } else {
-      console.warn(`${MODULE_ID}: No valid tab panel for ${tab}, using OOC fallback`);
-      TabbedChatManager.tabPanels['ooc']?.append(msgHtml);
+      console.warn(`${MODULE_ID}: No valid tab panel for ${tab}`);
     }
   }
 
   static _getMessageTab(message) {
-    // Handle rolls (dice, combat notifications, etc.)
+    // Handle rolls first
     if (message.isRoll || message.type === 'roll') return 'rolls';
-    
-    // Handle combat notifications (round announcements, etc.)
-    if (message.type === 'other' && (
-        message.content?.includes('Round') || 
-        message.content?.includes('Combat') ||
-        message.content?.includes('Initiative')
-    )) {
-      return 'rolls';
-    }
     
     // Handle whispers
     if (message.whisper?.length > 0) return 'whisper';
     
-    // Check for chat commands
-    const content = message.content || '';
+    // Check for /b bypass command
+    if (message.content?.startsWith('/b ')) return 'ooc';
     
-    // Narrator Tools module commands
-    if (content.startsWith('/desc ') || content.startsWith('/describe ') || content.startsWith('/description ')) {
-      message._isIC = true;
-      message._messageScene = message.speaker?.scene || canvas?.scene?.id;
-      return 'ic';
-    }
-    
-    if (content.startsWith('/narrate ') || content.startsWith('/narration ')) {
-      message._isIC = true;
-      message._messageScene = message.speaker?.scene || canvas?.scene?.id;
-      return 'ic';
-    }
-    
-    if (content.startsWith('/note ') || content.startsWith('/notify ') || content.startsWith('/notification ')) {
-      message._isLocalOOC = true;
-      return 'ooc';
-    }
-    
-    if (content.startsWith('/as ')) {
-      message._isIC = true;
-      message._messageScene = message.speaker?.scene || canvas?.scene?.id;
-      return 'ic';
-    }
-    
-    // Global OOC commands - these show in ALL scenes' OOC tabs
-    if (content.startsWith('/g ') || content.startsWith('/gooc ')) {
-      message._isGlobalOOC = true;
-      return 'ooc';
-    }
-    
-    // Bypass command - forces OOC even when controlling token
-    if (content.startsWith('/b ') || content.startsWith('/ooc ')) {
-      message._isLocalOOC = true;
-      return 'ooc';
-    }
-    
-    // Regular OOC command
-    if (content.startsWith('/ooc ')) {
-      message._isLocalOOC = true;
-      return 'ooc';
-    }
-
+    // Check if message has a token speaker
     const speaker = message.speaker;
     if (speaker?.token) {
-      const messageScene = speaker.scene;
-      const currentScene = canvas?.scene?.id;
-      
-      // If message is from a different scene than current, it goes to OOC
-      // (unless it's a global message which we handle separately)
-      if (messageScene !== currentScene) {
-        message._isFromDifferentScene = true;
-        return 'ooc';
-      }
-
-      const tokenDoc = canvas?.scene?.tokens?.get(speaker.token);
-      if (!tokenDoc) return 'ooc';
-
-      const controlledTokens = canvas?.tokens?.controlled;
-      if (controlledTokens.length === 0 || game.user.isGM) {
-        // No controlled tokens or GM - goes to IC (WORLD) tab
-        message._isIC = true;
-        message._messageScene = messageScene;
-        return 'ic';
-      }
-
-      const controlled = controlledTokens[0];
-      const distance = canvas.grid.measureDistance(tokenDoc.center, controlled.center);
-      const range = game.settings.get(MODULE_ID, 'proximityRange') || 30;
-      
-      if (distance <= range) {
-        // Within proximity range - goes to IC (WORLD) tab
-        message._isIC = true;
-        message._messageScene = messageScene;
-        return 'ic';
-      }
+      // Token is speaking = WORLD (IC)
+      return 'ic';
     }
-
-    // Default to OOC for everything else
-    message._isLocalOOC = true;
+    
+    // No token = OOC (includes GM narration without token)
     return 'ooc';
+  }
+
+  static _shouldRenderMessage(message, tab, currentScene, currentUserId, messageAuthor) {
+    // Get scene info
+    const messageScene = message.speaker?.scene;
+    
+    if (tab === 'whisper') {
+      // WHISPER: GMs see all, players see only their own
+      if (game.user.isGM) {
+        return true; // GM sees all whispers
+      } else {
+        // Players only see whispers they sent or received
+        const whisperTargets = message.whisper || [];
+        const isAuthor = (messageAuthor === currentUserId);
+        const isTarget = whisperTargets.includes(currentUserId);
+        return isAuthor || isTarget;
+      }
+    } else if (tab === 'ic' || tab === 'ooc' || tab === 'rolls') {
+      // WORLD/OOC/ROLLS: Show if same scene OR if user is author
+      const isSameScene = !messageScene || !currentScene || (messageScene === currentScene);
+      const isAuthor = (messageAuthor === currentUserId);
+      return isSameScene || isAuthor;
+    }
+    
+    return true; // Default: show message
   }
 
   static async updateMessage(message, msgHtml, $html) {
@@ -539,7 +390,14 @@ class TabbedChatManager {
     $html.find('.tabchat-panel').removeClass('active');
     $html.find(`.tabchat-panel[data-tab="${tabName}"]`).addClass('active');
     TabbedChatManager._activeTab = tabName;
-    TabbedChatManager._scrollBottom($html);
+    
+    // Scroll to bottom when switching tabs, but only if there are messages
+    setTimeout(() => {
+      const panel = TabbedChatManager.tabPanels[tabName];
+      if (panel && panel.find('.chat-message').length > 0) {
+        TabbedChatManager._scrollBottom($html, tabName);
+      }
+    }, 50);
   }
 
   static _scrollBottom($html, tabName = TabbedChatManager._activeTab) {
