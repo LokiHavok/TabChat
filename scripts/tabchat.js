@@ -24,8 +24,8 @@ class TabbedChatManager {
       TabbedChatManager._injectTabs(html);
     });
 
-    // Message classification on render
-    Hooks.on('renderChatMessage', (chatMessage, html, data) => {
+    // Message classification on render (v13: renderChatMessage → renderChatMessageHTML)
+    Hooks.on('renderChatMessageHTML', (chatMessage, html, data) => {
       TabbedChatManager._classifyMessage(chatMessage, html, data);
     });
 
