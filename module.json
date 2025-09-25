@@ -7,7 +7,9 @@
     "minimum": "13",
     "verified": "13"
   },
-  "scripts": ["scripts/tabchat.js"],
+  "scripts": [
+    "scripts/tabchat.js",
+    "scripts/commands.js",
   "styles": ["styles/tabchat.css"],
   "packs": [],
   "authors": [
