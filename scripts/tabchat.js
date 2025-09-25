@@ -194,7 +194,7 @@ class TabbedChatManager {
 
   static _classifyMessage(chatMessage, html, data) {
     const $html = $(html);
-    const messageType = data.message.type;
+    const messageStyle = data.message.style; // v13: type → style
     const content = data.message.content || '';
     
     // Remove any existing tabchat classes
@@ -211,25 +211,31 @@ class TabbedChatManager {
     } else if (chatMessage._tabchat_globalOOC) {
       tabClass = 'tabchat-ooc tabchat-global';
     } else {
-      // Standard classification
-      switch (messageType) {
-        case CONST.CHAT_MESSAGE_TYPES.IC:
-        case CONST.CHAT_MESSAGE_TYPES.EMOTE:
-          tabClass = 'tabchat-ic';
-          break;
-        case CONST.CHAT_MESSAGE_TYPES.OOC:
-          tabClass = 'tabchat-ooc';
-          break;
-        case CONST.CHAT_MESSAGE_TYPES.ROLL:
-        case CONST.CHAT_MESSAGE_TYPES.OTHER:
-          tabClass = 'tabchat-rolls';
-          break;
-        case CONST.CHAT_MESSAGE_TYPES.WHISPER:
-          tabClass = 'tabchat-messages';
-          break;
-        default:
-          // Token speaker = WORLD, otherwise OOC
-          tabClass = data.message.speaker?.token ? 'tabchat-ic' : 'tabchat-ooc';
+      // Check for rolls first (v13 way)
+      if (chatMessage.isRoll || (chatMessage.rolls && chatMessage.rolls.length > 0)) {
+        tabClass = 'tabchat-rolls';
+      }
+      // Check for whispers (v13 way)  
+      else if (chatMessage.whisper && chatMessage.whisper.length > 0) {
+        tabClass = 'tabchat-messages';
+      }
+      // Standard classification using v13 CHAT_MESSAGE_STYLES
+      else {
+        switch (messageStyle) {
+          case CONST.CHAT_MESSAGE_STYLES.IC:
+          case CONST.CHAT_MESSAGE_STYLES.EMOTE:
+            tabClass = 'tabchat-ic';
+            break;
+          case CONST.CHAT_MESSAGE_STYLES.OOC:
+            tabClass = 'tabchat-ooc';
+            break;
+          case CONST.CHAT_MESSAGE_STYLES.OTHER:
+            tabClass = 'tabchat-rolls';
+            break;
+          default:
+            // Token speaker = WORLD, otherwise OOC
+            tabClass = data.message.speaker?.token ? 'tabchat-ic' : 'tabchat-ooc';
+        }
       }
     }
 
@@ -329,7 +335,7 @@ class TabbedChatManager {
           author: userId,
           speaker: { alias: user?.name || 'Unknown Player' },
           content: message,
-          type: CONST.CHAT_MESSAGE_TYPES.OOC,
+          style: CONST.CHAT_MESSAGE_STYLES.OOC, // v13: type → style
           _tabchat_forceOOC: true
         });
       }, 50);
@@ -347,7 +353,7 @@ class TabbedChatManager {
           author: userId,
           speaker: ChatMessage.getSpeaker(),
           content: `[Global] ${message}`,
-          type: CONST.CHAT_MESSAGE_TYPES.OOC,
+          style: CONST.CHAT_MESSAGE_STYLES.OOC, // v13: type → style
           _tabchat_globalOOC: true
         });
       }, 50);
@@ -359,7 +365,7 @@ class TabbedChatManager {
   }
 
   static _handleNewMessage(chatMessage) {
-    const messageType = chatMessage.type;
+    const messageStyle = chatMessage.style; // v13: type → style
     const content = chatMessage.content || '';
     
     // Determine which tab this message belongs to
@@ -370,23 +376,30 @@ class TabbedChatManager {
     } else if (chatMessage._tabchat_globalOOC || content.startsWith('/g ')) {
       targetTab = 'ooc';
     } else {
-      switch (messageType) {
-        case CONST.CHAT_MESSAGE_TYPES.IC:
-        case CONST.CHAT_MESSAGE_TYPES.EMOTE:
-          targetTab = 'ic';
-          break;
-        case CONST.CHAT_MESSAGE_TYPES.OOC:
-          targetTab = 'ooc';
-          break;
-        case CONST.CHAT_MESSAGE_TYPES.ROLL:
-        case CONST.CHAT_MESSAGE_TYPES.OTHER:
-          targetTab = 'rolls';
-          break;
-        case CONST.CHAT_MESSAGE_TYPES.WHISPER:
-          targetTab = 'messages';
-          break;
-        default:
-          targetTab = chatMessage.speaker?.token ? 'ic' : 'ooc';
+      // Check for rolls first (v13 way)
+      if (chatMessage.isRoll || (chatMessage.rolls && chatMessage.rolls.length > 0)) {
+        targetTab = 'rolls';
+      }
+      // Check for whispers (v13 way)
+      else if (chatMessage.whisper && chatMessage.whisper.length > 0) {
+        targetTab = 'messages';
+      }
+      // Standard classification
+      else {
+        switch (messageStyle) {
+          case CONST.CHAT_MESSAGE_STYLES.IC:
+          case CONST.CHAT_MESSAGE_STYLES.EMOTE:
+            targetTab = 'ic';
+            break;
+          case CONST.CHAT_MESSAGE_STYLES.OOC:
+            targetTab = 'ooc';
+            break;
+          case CONST.CHAT_MESSAGE_STYLES.OTHER:
+            targetTab = 'rolls';
+            break;
+          default:
+            targetTab = chatMessage.speaker?.token ? 'ic' : 'ooc';
+        }
       }
     }
 
@@ -417,18 +430,25 @@ class TabbedChatManager {
       return 'ooc';
     }
     
-    // Handle by message type
-    switch (message.type) {
-      case CONST.CHAT_MESSAGE_TYPES.IC:
-      case CONST.CHAT_MESSAGE_TYPES.EMOTE:
+    // Check for rolls first (v13 way)
+    if (message.isRoll || (message.rolls && message.rolls.length > 0)) {
+      return 'rolls';
+    }
+    
+    // Check for whispers (v13 way)
+    if (message.whisper && message.whisper.length > 0) {
+      return 'messages';
+    }
+    
+    // Handle by message style (v13: type → style)
+    switch (message.style) {
+      case CONST.CHAT_MESSAGE_STYLES.IC:
+      case CONST.CHAT_MESSAGE_STYLES.EMOTE:
         return 'ic';
-      case CONST.CHAT_MESSAGE_TYPES.OOC:
+      case CONST.CHAT_MESSAGE_STYLES.OOC:
         return 'ooc';
-      case CONST.CHAT_MESSAGE_TYPES.ROLL:
-      case CONST.CHAT_MESSAGE_TYPES.OTHER:
+      case CONST.CHAT_MESSAGE_STYLES.OTHER:
         return 'rolls';
-      case CONST.CHAT_MESSAGE_TYPES.WHISPER:
-        return 'messages';
       default:
         return message.speaker?.token ? 'ic' : 'ooc';
     }
