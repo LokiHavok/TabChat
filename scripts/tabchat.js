@@ -284,23 +284,23 @@ class TabbedChatManager {
     
     const tabHtml = `
       <div class="tabchat-container" style="height: 100%; display: flex; flex-direction: column;">
-        <nav class="tabchat-nav" style="display: flex; flex-direction: row; flex-shrink: 0; height: auto; border-bottom: 1px solid #444;">
+        <nav class="tabchat-nav" style="display: flex; flex-direction: row; flex-shrink: 0; height: auto;">
           <a class="tabchat-tab" data-tab="whisper" style="padding: 8px 12px; cursor: pointer;">MESSAGES</a>
           <a class="tabchat-tab" data-tab="rolls" style="padding: 8px 12px; cursor: pointer;">GAME</a>
           <a class="tabchat-tab" data-tab="ooc" style="padding: 8px 12px; cursor: pointer;">OOC</a>
           <a class="tabchat-tab active" data-tab="ic" style="padding: 8px 12px; cursor: pointer;">WORLD</a>
         </nav>
-        <section class="tabchat-panel active" data-tab="ic" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
-          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 4px; margin: 0; list-style: none; min-height: 0; height: 100%;"></ol>
+        <section class="tabchat-panel active" data-tab="ic" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 0; margin: 0; list-style: none;"></ol>
         </section>
-        <section class="tabchat-panel" data-tab="ooc" style="flex: 1; display: none; flex-direction: column; overflow: hidden; min-height: 0;">
-          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 4px; margin: 0; list-style: none; min-height: 0; height: 100%;"></ol>
+        <section class="tabchat-panel" data-tab="ooc" style="flex: 1; display: none; flex-direction: column; overflow: hidden;">
+          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 0; margin: 0; list-style: none;"></ol>
         </section>
-        <section class="tabchat-panel" data-tab="rolls" style="flex: 1; display: none; flex-direction: column; overflow: hidden; min-height: 0;">
-          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 4px; margin: 0; list-style: none; min-height: 0; height: 100%;"></ol>
+        <section class="tabchat-panel" data-tab="rolls" style="flex: 1; display: none; flex-direction: column; overflow: hidden;">
+          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 0; margin: 0; list-style: none;"></ol>
         </section>
-        <section class="tabchat-panel" data-tab="whisper" style="flex: 1; display: none; flex-direction: column; overflow: hidden; min-height: 0;">
-          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 4px; margin: 0; list-style: none; min-height: 0; height: 100%;"></ol>
+        <section class="tabchat-panel" data-tab="whisper" style="flex: 1; display: none; flex-direction: column; overflow: hidden;">
+          <ol class="chat-messages" style="flex: 1; overflow-y: auto; padding: 0; margin: 0; list-style: none;"></ol>
         </section>
       </div>
     `;
