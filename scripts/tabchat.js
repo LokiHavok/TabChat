@@ -139,7 +139,7 @@ class TabbedChatManager {
           text-align: center !important;
           background: rgba(0, 0, 0, 0.5) !important;
           color: #ccc !important;
-          font-size: 14px !important;
+          font-size: 9px !important;
           font-weight: bold !important;
           cursor: pointer !important;
           transition: all 0.2s ease !important;
