@@ -96,13 +96,13 @@ class TabbedChatManager {
     const tabsHTML = `
       <div class="tabchat-container">
         <nav class="tabchat-nav">
-          <a class="tabchat-tab active" data-tab="ic" style="order: 1;">WORLD</a>
-          <div class="tabchat-separator" style="order: 2;"></div>
-          <a class="tabchat-tab" data-tab="ooc" style="order: 3;">OOC</a>
-          <div class="tabchat-separator" style="order: 4;"></div>
-          <a class="tabchat-tab" data-tab="rolls" style="order: 5;">GAME</a>
+          <a class="tabchat-tab active" data-tab="ic" style="order: 7;">WORLD</a>
           <div class="tabchat-separator" style="order: 6;"></div>
-          <a class="tabchat-tab" data-tab="messages" style="order: 7;">MESSAGES</a>
+          <a class="tabchat-tab" data-tab="ooc" style="order: 5;">OOC</a>
+          <div class="tabchat-separator" style="order: 4;"></div>
+          <a class="tabchat-tab" data-tab="rolls" style="order: 3;">GAME</a>
+          <div class="tabchat-separator" style="order: 2;"></div>
+          <a class="tabchat-tab" data-tab="messages" style="order: 1;">MESSAGES</a>
         </nav>
         <section class="tabchat-panel active" data-tab="ic">
           <ol class="chat-messages"></ol>
@@ -182,6 +182,12 @@ class TabbedChatManager {
           margin: 0 !important;
           padding: 0 !important;
           list-style: none !important;
+          text-align: left !important;
+          direction: ltr !important;
+        }
+        .tabchat-panel ol.chat-messages li {
+          text-align: left !important;
+          direction: ltr !important;
         }
         .tabchat-ooc-prefix {
           color: #ff9800 !important;
