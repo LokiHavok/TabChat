@@ -331,7 +331,7 @@ class TabbedChatManager {
           if (message.speaker?.alias) {
             cleanContent = cleanContent.replace(new RegExp(`^${message.speaker.alias}\\s+`, 'i'), '');
           }
-          messageContent.html(`<span style="color: #837e99;"><strong>${actorName}</strong> ${cleanContent}</span>`);
+          messageContent.html(`<span style="color: #871bb4;"><strong>${actorName} ${cleanContent}</strong></span>`);
         } else {
           // Format as: [Actor] says: [Message]
           messageContent.html(`<strong>${actorName} says:</strong> ${originalContent}`);
