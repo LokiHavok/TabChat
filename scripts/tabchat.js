@@ -379,11 +379,6 @@ class TabbedChatManager {
       return 'ooc';
     }
     
-    // Narrator Tools compatibility - route to IC
-    if (message._tabchat_narratorTools) {
-      return 'ic';
-    }
-    
     // Check for command patterns in content (fallback)
     const content = message.content || '';
     if (content.includes('[Global]')) {
