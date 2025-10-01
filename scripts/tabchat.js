@@ -513,13 +513,16 @@ class TabbedChatManager {
     Hooks.on('preCreateChatMessage', (doc, data, options, userId) => {
       const content = data.content || '';
       
-      // Handle emotes - ensure proper scene and disable bubbles
-      if (data.type === 4 || data.type === CONST.CHAT_MESSAGE_TYPES?.EMOTE) {
-        // Ensure emote has current scene for proper instancing
+      // Ensure all non-global messages have scene information for proper instancing
+      if (!data.content?.includes('[GLOBAL]') && !doc._tabchat_globalOOC) {
         if (!data.speaker?.scene) {
           data.speaker = data.speaker || {};
           data.speaker.scene = canvas?.scene?.id;
         }
+      }
+      
+      // Handle emotes - disable bubbles
+      if (data.type === 4 || data.type === CONST.CHAT_MESSAGE_TYPES?.EMOTE) {
         // Disable chat bubbles for emotes
         data.emote = false;
       }
