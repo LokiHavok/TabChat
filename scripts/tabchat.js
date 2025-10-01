@@ -326,13 +326,10 @@ class TabbedChatManager {
         if (isEmote) {
           // Format as: [Actor] [Message] in purple color
           // Strip out speaker alias from the beginning of emote content
-          let cleanContent = originalContent;
-          
-          console.log(`${MODULE_ID}: Emote detected - speaker.alias: "${message.speaker?.alias}", originalContent: "${originalContent}"`);
+          let cleanContent = originalContent.trim();
           
           if (message.speaker?.alias) {
             cleanContent = cleanContent.replace(new RegExp(`^${message.speaker.alias}\\s+`, 'i'), '');
-            console.log(`${MODULE_ID}: After replacement - cleanContent: "${cleanContent}"`);
           }
           messageContent.html(`<span style="color: #837e99;"><strong>${actorName}</strong> ${cleanContent}</span>`);
         } else {
