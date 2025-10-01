@@ -408,7 +408,7 @@ class TabbedChatManager {
    * @returns {boolean} Whether the message should be rendered
    */
   static _shouldRenderMessage(message, tab, currentScene, currentUserId, messageAuthor) {
-    const messageScene = message.speaker?.scene || currentScene;
+    const messageScene = message.speaker?.scene;
     
     if (tab === 'messages') {
       // Whispers: GMs see all, players see their own
@@ -422,6 +422,8 @@ class TabbedChatManager {
       if (message._tabchat_globalOOC) return true;
       
       // Scene-specific messages: visible in same scene OR if you're the author
+      // If no messageScene is set, don't show (except for author)
+      if (!messageScene) return messageAuthor === currentUserId;
       return messageScene === currentScene || messageAuthor === currentUserId;
     }
     
