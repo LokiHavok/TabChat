@@ -313,7 +313,19 @@ class TabbedChatManager {
       const messageContent = msgHtml.find('.message-content');
       if (messageContent.length) {
         const originalContent = messageContent.html();
-        messageContent.html(`<strong>${actorName} says:</strong> ${originalContent}`);
+        
+        // Check if this is a /me emote message
+        const isEmote = message.type === CONST.CHAT_MESSAGE_TYPES.EMOTE || 
+                        message.content?.startsWith('/me ') ||
+                        originalContent.includes('emote');
+        
+        if (isEmote) {
+          // Format as: [Actor] [Message] in purple color
+          messageContent.html(`<span style="color: #837e99;"><strong>${actorName}</strong> ${originalContent}</span>`);
+        } else {
+          // Format as: [Actor] says: [Message]
+          messageContent.html(`<strong>${actorName} says:</strong> ${originalContent}`);
+        }
       }
       // Hide the player name header in IC messages
       msgHtml.find('.message-sender, .message-header, .message-metadata').hide();
