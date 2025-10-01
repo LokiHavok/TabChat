@@ -96,13 +96,13 @@ class TabbedChatManager {
     const tabsHTML = `
       <div class="tabchat-container">
         <nav class="tabchat-nav">
-          <a class="tabchat-tab active" data-tab="ic">WORLD</a>
-          <div class="tabchat-separator"></div>
-          <a class="tabchat-tab" data-tab="ooc">OOC</a>
-          <div class="tabchat-separator"></div>
-          <a class="tabchat-tab" data-tab="rolls">GAME</a>
-          <div class="tabchat-separator"></div>
-          <a class="tabchat-tab" data-tab="messages">MESSAGES</a>
+          <a class="tabchat-tab active" data-tab="ic" style="order: 1;">WORLD</a>
+          <div class="tabchat-separator" style="order: 2;"></div>
+          <a class="tabchat-tab" data-tab="ooc" style="order: 3;">OOC</a>
+          <div class="tabchat-separator" style="order: 4;"></div>
+          <a class="tabchat-tab" data-tab="rolls" style="order: 5;">GAME</a>
+          <div class="tabchat-separator" style="order: 6;"></div>
+          <a class="tabchat-tab" data-tab="messages" style="order: 7;">MESSAGES</a>
         </nav>
         <section class="tabchat-panel active" data-tab="ic">
           <ol class="chat-messages"></ol>
@@ -178,8 +178,6 @@ class TabbedChatManager {
         .tabchat-panel ol.chat-messages {
           flex: 1 !important;
           overflow-y: auto !important;
-          margin: 0 !important;
-          padding: 0 !important;
           list-style: none !important;
         }
         .tabchat-ooc-prefix {
