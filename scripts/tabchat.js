@@ -325,7 +325,13 @@ class TabbedChatManager {
         
         if (isEmote) {
           // Format as: [Actor] [Message] in purple color
-          messageContent.html(`<span style="color: #837e99;"><strong>${actorName}</strong> ${originalContent}</span>`);
+          // Strip out player name from the beginning of emote content
+          let cleanContent = originalContent;
+          const user = game.users.get(message.user);
+          if (user?.name) {
+            cleanContent = cleanContent.replace(new RegExp(`^${user.name}\\s+`, 'i'), '');
+          }
+          messageContent.html(`<span style="color: #837e99;"><strong>${actorName}</strong> ${cleanContent}</span>`);
         } else {
           // Format as: [Actor] says: [Message]
           messageContent.html(`<strong>${actorName} says:</strong> ${originalContent}`);
