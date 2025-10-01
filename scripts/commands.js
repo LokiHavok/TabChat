@@ -6,6 +6,13 @@
  * /b [message] - Send a bracket/OOC message (appears in OOC tab) prefaced with {OOC}
  * /g [message] - Send a global message (visible across all scenes) prefaced with [Global]
  * /gooc [message] - Alternative syntax for global message
+ * 
+ * Compatibility Bridge: Narrator Tools
+ * Routes Narrator Tools commands to IC tab:
+ * /desc, /describe, /description - Descriptive messages
+ * /narrate, /narration - Canvas and chat narration
+ * /as [speaker] - Send as specific speaker
+ * /note, /notify, /notification - GM notes (not routed, stays as-is)
  */
 
 const MODULE_ID = 'tabchat';
@@ -35,6 +42,13 @@ class ChatCommands {
         return false; // Prevent original message
       }
       
+      // COMPATIBILITY BRIDGE: Narrator Tools
+      // Ensure Narrator Tools commands route to IC tab
+      if (ChatCommands._isNarratorToolsCommand(content)) {
+        console.log(`${MODULE_ID}: Detected Narrator Tools command, ensuring IC routing`);
+        ChatCommands._ensureICRouting(data);
+      }
+      
       // Let other messages proceed normally
       return true;
     });
@@ -51,6 +65,46 @@ class ChatCommands {
         }, 100);
       }
     });
+  }
+
+  /**
+   * Check if content is a Narrator Tools command
+   * @param {string} content - Message content
+   * @returns {boolean} True if Narrator Tools command
+   */
+  static _isNarratorToolsCommand(content) {
+    // Check for Narrator Tools commands (excluding /note which stays GM-only)
+    const narratorCommands = [
+      /^\/desc\s+/i,
+      /^\/describe\s+/i,
+      /^\/description\s+/i,
+      /^\/narrate\s+/i,
+      /^\/narration\s+/i,
+      /^\/as\s+/i
+    ];
+    
+    return narratorCommands.some(regex => regex.test(content));
+  }
+
+  /**
+   * Ensure Narrator Tools messages route to IC tab
+   * @param {object} data - Message data
+   */
+  static _ensureICRouting(data) {
+    // Mark this as an IC message by ensuring it has proper speaker data
+    if (!data.speaker) {
+      data.speaker = ChatMessage.getSpeaker();
+    }
+    
+    // Ensure scene is set for proper instancing
+    if (!data.speaker.scene) {
+      data.speaker.scene = canvas?.scene?.id;
+    }
+    
+    // If no token/actor, set a flag to force IC routing
+    if (!data.speaker.token && !data.speaker.actor) {
+      data._tabchat_narratorTools = true;
+    }
   }
 
   /**
