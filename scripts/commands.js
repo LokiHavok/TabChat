@@ -56,6 +56,7 @@ class ChatCommands {
   /**
    * Handle the /b (bracket/OOC) command
    * Creates an OOC message that appears in the current scene's OOC tab
+   * Format: [OOC] Represented Actor - Message
    * @param {string} content - The full message content
    * @param {string} userId - The user ID who sent the message  
    * @param {object} originalData - Original message data
@@ -69,20 +70,18 @@ class ChatCommands {
       return;
     }
     
-    const user = game.users.get(userId);
     const speaker = ChatMessage.getSpeaker();
+    const actor = speaker?.actor ? game.actors.get(speaker.actor) : null;
+    const actorName = actor?.name || speaker.alias || 'Unknown';
     
     console.log(`${MODULE_ID}: Creating /b message: "${message}"`);
     
-    // Create a custom OOC message with {OOC} prefix
+    // Create OOC message with [OOC] Represented Actor - Message format
     ChatMessage.create({
       user: userId,
       author: userId,
-      speaker: {
-        ...speaker,
-        alias: user?.name || speaker.alias || 'Unknown Player'
-      },
-      content: `<span class="tabchat-ooc-prefix">{OOC}</span> ${message}`,
+      speaker: speaker,
+      content: `<span class="tabchat-ooc-prefix">[OOC]</span> <strong>${actorName}</strong> - ${message}`,
       type: CONST.CHAT_MESSAGE_TYPES.OOC,
       _tabchat_forceOOC: true  // Special flag for tab routing
     });
@@ -91,6 +90,7 @@ class ChatCommands {
   /**
    * Handle the /g or /gooc (global) command
    * Creates a global message visible across all scenes
+   * Format: [GLOBAL] Player Name - Message
    * @param {string} content - The full message content
    * @param {string} userId - The user ID who sent the message
    * @param {object} originalData - Original message data
@@ -106,19 +106,16 @@ class ChatCommands {
     }
     
     const user = game.users.get(userId);
-    const speaker = ChatMessage.getSpeaker();
+    const playerName = user?.name || 'Unknown Player';
     
     console.log(`${MODULE_ID}: Creating /g message: "${message}"`);
     
-    // Create a global message with [Global] prefix
+    // Create a global message with [GLOBAL] Player Name - Message format
     ChatMessage.create({
       user: userId,
       author: userId,
-      speaker: {
-        ...speaker,
-        alias: user?.name || speaker.alias || 'Unknown Player'
-      },
-      content: `<span class="tabchat-global-prefix">[Global]</span> ${message}`,
+      speaker: ChatMessage.getSpeaker(),
+      content: `<span class="tabchat-global-prefix">[GLOBAL]</span> <strong>${playerName}</strong> - ${message}`,
       type: CONST.CHAT_MESSAGE_TYPES.OOC,
       _tabchat_globalOOC: true  // Special flag for global visibility
     });
