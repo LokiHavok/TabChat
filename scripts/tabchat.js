@@ -126,6 +126,7 @@ class TabbedChatManager {
         }
         .tabchat-nav {
           display: flex !important;
+          flex-direction: row !important;
           align-items: center !important;
           background: rgba(0, 0, 0, 0.8) !important;
           border-bottom: 2px solid #444 !important;
@@ -178,6 +179,8 @@ class TabbedChatManager {
         .tabchat-panel ol.chat-messages {
           flex: 1 !important;
           overflow-y: auto !important;
+          margin: 0 !important;
+          padding: 0 !important;
           list-style: none !important;
         }
         .tabchat-ooc-prefix {
@@ -432,7 +435,12 @@ class TabbedChatManager {
   static _scrollToBottom($html, tabName = TabbedChatManager._activeTab) {
     const ol = $html.find(`.tabchat-panel[data-tab="${tabName}"] ol.chat-messages`);
     if (ol?.length) {
-      ol.scrollTop(ol[0].scrollHeight);
+      const lastMessage = ol.children().last()[0];
+      if (lastMessage) {
+        lastMessage.scrollIntoView({ behavior: 'auto', block: 'end' });
+      } else {
+        ol.scrollTop(ol[0].scrollHeight);
+      }
     }
   }
 
