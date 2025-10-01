@@ -325,11 +325,14 @@ class TabbedChatManager {
         
         if (isEmote) {
           // Format as: [Actor] [Message] in purple color
-          // Strip out player name from the beginning of emote content
+          // Strip out speaker alias from the beginning of emote content
           let cleanContent = originalContent;
-          const user = game.users.get(message.user);
-          if (user?.name) {
-            cleanContent = cleanContent.replace(new RegExp(`^${user.name}\\s+`, 'i'), '');
+          
+          console.log(`${MODULE_ID}: Emote detected - speaker.alias: "${message.speaker?.alias}", originalContent: "${originalContent}"`);
+          
+          if (message.speaker?.alias) {
+            cleanContent = cleanContent.replace(new RegExp(`^${message.speaker.alias}\\s+`, 'i'), '');
+            console.log(`${MODULE_ID}: After replacement - cleanContent: "${cleanContent}"`);
           }
           messageContent.html(`<span style="color: #837e99;"><strong>${actorName}</strong> ${cleanContent}</span>`);
         } else {
