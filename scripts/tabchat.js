@@ -305,6 +305,18 @@ class TabbedChatManager {
 
     const msgHtml = $(rendered);
     const tab = TabbedChatManager._getMessageTab(message);
+    
+    // Format IC/WORLD messages with "[Actor] says:" prefix
+    if (tab === 'ic' && message.speaker?.actor) {
+      const actor = game.actors.get(message.speaker.actor);
+      const actorName = actor?.name || message.speaker.alias;
+      const messageContent = msgHtml.find('.message-content');
+      if (messageContent.length) {
+        const originalContent = messageContent.html();
+        messageContent.html(`<strong>${actorName} says:</strong> ${originalContent}`);
+      }
+    }
+    
     const currentScene = canvas?.scene?.id || 'default';
     const messageScene = message.speaker?.scene || currentScene;
     const currentUserId = game.user.id;
