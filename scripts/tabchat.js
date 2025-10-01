@@ -314,10 +314,14 @@ class TabbedChatManager {
       if (messageContent.length) {
         const originalContent = messageContent.html();
         
-        // Check if this is a /me emote message (type 4 in Foundry)
-        const isEmote = message.type === 4 || message.type === CONST.CHAT_MESSAGE_TYPES.EMOTE;
+        // Check multiple ways to detect emote
+        const isEmote = message.type === 4 || 
+                        message.type === CONST.CHAT_MESSAGE_TYPES?.EMOTE ||
+                        message.flavor?.toLowerCase().includes('emote') ||
+                        msgHtml.hasClass('emote') ||
+                        originalContent.toLowerCase().includes('emote');
         
-        console.log(`${MODULE_ID}: Message type: ${message.type}, isEmote: ${isEmote}`);
+        console.log(`${MODULE_ID}: Message type: ${message.type}, flavor: ${message.flavor}, classes: ${msgHtml.attr('class')}, isEmote: ${isEmote}`);
         
         if (isEmote) {
           // Format as: [Actor] [Message] in purple color
