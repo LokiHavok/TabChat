@@ -315,6 +315,8 @@ class TabbedChatManager {
         const originalContent = messageContent.html();
         messageContent.html(`<strong>${actorName} says:</strong> ${originalContent}`);
       }
+      // Hide the player name header in IC messages
+      msgHtml.find('.message-sender, .message-header, .message-metadata').hide();
     }
     
     const currentScene = canvas?.scene?.id || 'default';
