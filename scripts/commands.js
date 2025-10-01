@@ -101,9 +101,18 @@ class ChatCommands {
       data.speaker.scene = canvas?.scene?.id;
     }
     
-    // If no token/actor, set a flag to force IC routing
+    // Force IC routing by adding a dummy token reference
+    // This tricks the routing logic into thinking this is a token message
     if (!data.speaker.token && !data.speaker.actor) {
-      data._tabchat_narratorTools = true;
+      // Get first available token or actor as fallback
+      const token = canvas?.tokens?.controlled?.[0] || canvas?.tokens?.placeables?.[0];
+      if (token) {
+        data.speaker.token = token.id;
+        data.speaker.actor = token.actor?.id;
+      } else {
+        // If no token, at least set the scene to ensure IC routing
+        data.speaker.token = 'narrator-tools-dummy';
+      }
     }
   }
 
