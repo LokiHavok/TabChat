@@ -388,11 +388,16 @@ class TabbedChatManager {
       return 'ooc';
     }
     
-    // Narrator Tools compatibility - detect by flavor or content patterns
-    const flavor = message.flavor || '';
-    if (flavor.includes('description') || flavor.includes('narration') || 
-        content.match(/class="narrator-/) || content.match(/data-narrator/)) {
-      console.log(`${MODULE_ID}: Detected Narrator Tools message, routing to IC`);
+    // Narrator Tools compatibility - check flags
+    const flags = message.flags || {};
+    if (flags['narrator-tools'] || flags.narratorTools) {
+      console.log(`${MODULE_ID}: Detected Narrator Tools message via flags, routing to IC`);
+      return 'ic';
+    }
+    
+    // Narrator Tools compatibility - detect by alias "Narrator"
+    if (message.speaker?.alias === 'Narrator' || message.speaker?.alias?.includes('Narrator')) {
+      console.log(`${MODULE_ID}: Detected Narrator Tools message via alias, routing to IC`);
       return 'ic';
     }
     
