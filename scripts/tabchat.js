@@ -356,9 +356,9 @@ class TabbedChatManager {
       TabbedChatManager.tabPanels[tab].append(msgHtml);
       TabbedChatManager._storeMessage(message, msgHtml, tab, messageScene);
       
-      // Auto-scroll if this tab is currently active
+      // ONLY auto-scroll if this is the currently active tab
       if (TabbedChatManager._activeTab === tab) {
-        setTimeout(() => TabbedChatManager._scrollToBottom($html), 50);
+        setTimeout(() => TabbedChatManager._scrollToBottom($html, tab), 50);
       }
     }
   }
