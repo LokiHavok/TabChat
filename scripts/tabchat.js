@@ -402,11 +402,13 @@ class TabbedChatManager {
     }
     
     // Narrator Tools /as command compatibility - detect custom alias
-    const user = game.users.get(message.user || message.author);
+    const user = game.users.get(message.author?.id || message.author);
     if (message.speaker?.alias && user?.name && message.speaker.alias !== user.name && !message.speaker.token) {
-      console.log(`${MODULE_ID}: Detected /as command message (custom alias: ${message.speaker.alias}), routing to IC`);
+      console.log(`${MODULE_ID}: Detected /as command message (alias: "${message.speaker.alias}" vs user: "${user.name}"), routing to IC`);
       return 'ic';
     }
+    
+    console.log(`${MODULE_ID}: Message routing - alias: "${message.speaker?.alias}", user: "${user?.name}", token: ${!!message.speaker?.token}, final route: ${message.speaker?.token ? 'ic' : 'ooc'}`);
     
     // Dice rolls and game mechanics
     if (message.isRoll || message.type === 'roll') return 'rolls';
