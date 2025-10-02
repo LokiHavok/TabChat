@@ -401,6 +401,13 @@ class TabbedChatManager {
       return 'ic';
     }
     
+    // Narrator Tools /as command compatibility - detect custom alias
+    const user = game.users.get(message.user || message.author);
+    if (message.speaker?.alias && user?.name && message.speaker.alias !== user.name && !message.speaker.token) {
+      console.log(`${MODULE_ID}: Detected /as command message (custom alias: ${message.speaker.alias}), routing to IC`);
+      return 'ic';
+    }
+    
     // Dice rolls and game mechanics
     if (message.isRoll || message.type === 'roll') return 'rolls';
     
