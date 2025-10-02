@@ -388,6 +388,14 @@ class TabbedChatManager {
       return 'ooc';
     }
     
+    // Narrator Tools compatibility - detect by flavor or content patterns
+    const flavor = message.flavor || '';
+    if (flavor.includes('description') || flavor.includes('narration') || 
+        content.match(/class="narrator-/) || content.match(/data-narrator/)) {
+      console.log(`${MODULE_ID}: Detected Narrator Tools message, routing to IC`);
+      return 'ic';
+    }
+    
     // Dice rolls and game mechanics
     if (message.isRoll || message.type === 'roll') return 'rolls';
     
