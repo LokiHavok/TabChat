@@ -489,23 +489,32 @@ class TabbedChatManager {
     // Update active tab reference
     TabbedChatManager._activeTab = tabName;
     
-    // Auto-scroll to bottom of newly activated tab
-    setTimeout(() => TabbedChatManager._scrollToBottom($html), 50);
+    // Always scroll to last message when activating a tab
+    setTimeout(() => {
+      const ol = $html.find(`.tabchat-panel[data-tab="${tabName}"] ol.chat-messages`);
+      if (ol?.length) {
+        const lastMessage = ol.children().last()[0];
+        if (lastMessage) {
+          lastMessage.scrollIntoView({ behavior: 'auto', block: 'end' });
+        }
+      }
+    }, 50);
   }
 
   /**
    * Scroll a tab's chat panel to the bottom
    * @param {jQuery} $html - The chat element
-   * @param {string} tabName - The tab to scroll (defaults to active tab)
+   * @param {string} tabName - The tab to scroll
    */
-  static _scrollToBottom($html, tabName = TabbedChatManager._activeTab) {
+  static _scrollToBottom($html, tabName) {
+    // ONLY scroll if this is the currently active tab
+    if (tabName !== TabbedChatManager._activeTab) return;
+    
     const ol = $html.find(`.tabchat-panel[data-tab="${tabName}"] ol.chat-messages`);
     if (ol?.length) {
       const lastMessage = ol.children().last()[0];
       if (lastMessage) {
         lastMessage.scrollIntoView({ behavior: 'auto', block: 'end' });
-      } else {
-        ol.scrollTop(ol[0].scrollHeight);
       }
     }
   }
